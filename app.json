@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "AO Vendor Manager",
+    "slug": "ao-vendor-manager",
+    "version": "1.0.0",
+    "scheme": "aovendor",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "android": {
+      "package": "com.abosseyokaidirect.vendormanager",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0060C0"
+      }
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.abosseyokaidirect.vendormanager"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0060C0"
+        }
+      ],
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "64fab91e-1093-4f3d-a321-da6c44de5d0d"
+      }
+    }
+  }
+}

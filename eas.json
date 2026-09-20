@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.abosseyokaidirect.com",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "denfjhbm2",
+        "REACT_NATIVE_DOWNLOADS_DIR": "/home/expo/workingdir/build/sqlite-downloads"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.abosseyokaidirect.com",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "denfjhbm2",
+        "REACT_NATIVE_DOWNLOADS_DIR": "/home/expo/workingdir/build/sqlite-downloads"
+      }
+    }
+  }
+}
