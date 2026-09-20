@@ -51,6 +51,7 @@ export default function AddEditProductScreen(): React.JSX.Element {
   const [condition, setCondition] = useState<Product["condition"]>(existing?.condition ?? "USED");
   const [description, setDescription] = useState(existing?.description ?? "");
   const [photos, setPhotos] = useState<string[]>(existing?.photos ?? []);
+  const [localUris, setLocalUris] = useState<string[]>(existing?.photos ?? []);
   const [inStock, setInStock] = useState(existing?.inStock ?? true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -65,11 +66,14 @@ export default function AddEditProductScreen(): React.JSX.Element {
       quality: 0.7,
     });
     if (result.canceled || !result.assets[0]) return;
+    const localUri = result.assets[0].uri;
+    setLocalUris((prev) => [...prev, localUri]);
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(result.assets[0].uri);
+      const url = await uploadToCloudinary(localUri);
       setPhotos((prev) => [...prev, url]);
     } catch {
+      setLocalUris((prev) => prev.filter((u) => u !== localUri));
       Alert.alert("Upload failed", "Could not upload photo");
     } finally {
       setUploading(false);
@@ -151,20 +155,23 @@ export default function AddEditProductScreen(): React.JSX.Element {
         />
       </Field>
 
-      <Field label={`Photos (${photos.length}/4)`}>
+      <Field label={`Photos (${localUris.length}/4)`}>
         <View style={styles.photoGrid}>
-          {photos.map((uri, i) => (
+          {localUris.map((uri, i) => (
             <View key={i} style={styles.photoWrapper}>
-              <Image source={{ uri }} style={styles.photo} />
+              <Image source={{ uri }} style={styles.photo} resizeMode="cover" />
               <TouchableOpacity
                 style={styles.removePhoto}
-                onPress={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                onPress={() => {
+                  setLocalUris((prev) => prev.filter((_, j) => j !== i));
+                  setPhotos((prev) => prev.filter((_, j) => j !== i));
+                }}
               >
                 <Ionicons name="close-circle" size={20} color={COLORS.red} />
               </TouchableOpacity>
             </View>
           ))}
-          {photos.length < 4 && (
+          {localUris.length < 4 && (
             <TouchableOpacity style={styles.addPhoto} onPress={() => void pickPhoto()} disabled={uploading}>
               {uploading ? (
                 <ActivityIndicator color={COLORS.primary} />

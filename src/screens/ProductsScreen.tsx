@@ -55,8 +55,8 @@ export default function ProductsScreen(): React.JSX.Element {
     try {
       const { products: p } = await api.get<{ products: Product[] }>("/vendor/products");
       setProducts(p);
-    } catch {
-      Alert.alert("Error", "Could not load products");
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Could not load products");
     } finally {
       setLoading(false);
     }
