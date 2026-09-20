@@ -8,3 +8,4 @@ export { QuoteForm } from "./QuoteForm";
 export { RequestCard } from "./RequestCard";
 export { StatusBadge } from "./StatusBadge";
 export { OfflineBanner } from "./OfflineBanner";
+export { SyncStatusIcon } from "./SyncStatusIcon";

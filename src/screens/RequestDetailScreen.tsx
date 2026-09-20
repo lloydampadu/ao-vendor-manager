@@ -7,9 +7,11 @@ import {
   enqueueQuote,
   enqueueDecline,
   updateAssignmentStatus,
+  getQuoteQueueItem,
   type Assignment,
   type QuoteQueueItem,
   type DeclineQueueItem,
+  type QuoteSyncStatus,
 } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
 import {
@@ -21,6 +23,7 @@ import {
   NetworkImage,
   HeightSpacer,
   WidthSpacer,
+  SyncStatusIcon,
 } from "../../components";
 import { COLORS, SIZES } from "../../constants/theme";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
@@ -54,11 +57,18 @@ function makeId(): string {
 export default function RequestDetailScreen({ navigation, route }: Props): React.JSX.Element {
   const { assignmentId } = route.params;
   const [row, setRow] = useState<Assignment | null>(null);
+  const [quoteSyncStatus, setQuoteSyncStatus] = useState<QuoteSyncStatus | null>(null);
   const { startSync } = useSyncStore();
 
   const load = useCallback(async () => {
-    const assignment = await getAssignment(assignmentId);
+    const [assignment, queueItem] = await Promise.all([
+      getAssignment(assignmentId),
+      getQuoteQueueItem(assignmentId),
+    ]);
     setRow(assignment);
+    if (queueItem) {
+      setQuoteSyncStatus(queueItem.synced ? "synced" : queueItem.error ? "error" : "pending");
+    }
   }, [assignmentId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -196,7 +206,10 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {/* QUOTED: read-only quote */}
       {row.status === "QUOTED" && quote !== null && (
         <Card>
-          <ReusableText text="Your submitted quote" family="bold" size={16} color={COLORS.secondary} />
+          <View style={styles.row}>
+            <ReusableText text="Your submitted quote" family="bold" size={16} color={COLORS.secondary} />
+            {quoteSyncStatus != null && <SyncStatusIcon status={quoteSyncStatus} />}
+          </View>
           <HeightSpacer height={8} />
           <ReusableText text={`Price: GHS ${quote.priceGhs}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
           <HeightSpacer height={4} />

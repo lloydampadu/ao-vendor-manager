@@ -150,6 +150,31 @@ export async function markDeclineError(id: string, error: string): Promise<void>
   await db.runAsync(`UPDATE decline_queue SET error = ? WHERE id = ?`, [error, id]);
 }
 
+export type QuoteSyncStatus = "pending" | "synced" | "error";
+
+export async function getQuoteQueueItem(assignment_id: string): Promise<QuoteQueueItem | null> {
+  const db = await getDb();
+  return db.getFirstAsync<QuoteQueueItem>(
+    `SELECT * FROM quote_queue WHERE assignment_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [assignment_id],
+  );
+}
+
+export async function getAllQuoteQueueStatusMap(): Promise<Record<string, QuoteSyncStatus>> {
+  const db = await getDb();
+  const items = await db.getAllAsync<QuoteQueueItem>(`SELECT * FROM quote_queue`);
+  const map: Record<string, QuoteSyncStatus> = {};
+  for (const item of items) {
+    const status: QuoteSyncStatus = item.synced ? "synced" : item.error ? "error" : "pending";
+    const existing = map[item.assignment_id];
+    // pending beats error beats synced — show worst state if multiple rows
+    if (!existing || status === "pending" || (existing === "synced" && status === "error")) {
+      map[item.assignment_id] = status;
+    }
+  }
+  return map;
+}
+
 export async function updateAssignmentStatus(id: string, status: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE assignments SET status = ? WHERE id = ?`, [status, id]);

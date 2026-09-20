@@ -4,9 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { CompositeNavigationProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { getAssignments, type Assignment } from "../../lib/db";
+import { getAssignments, getAllQuoteQueueStatusMap, type Assignment, type QuoteSyncStatus } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { StatusBadge, Card, ReusableText, HeightSpacer, WidthSpacer } from "../../components";
+import { StatusBadge, Card, ReusableText, HeightSpacer, WidthSpacer, SyncStatusIcon } from "../../components";
 import { COLORS, SIZES } from "../../constants/theme";
 import type { TabParamList } from "../navigation/TabNavigator";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
@@ -23,11 +23,13 @@ type QuoteData  = { priceGhs: number; availability: string; notes?: string };
 
 export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
   const [rows, setRows] = useState<Assignment[]>([]);
+  const [syncStatusMap, setSyncStatusMap] = useState<Record<string, QuoteSyncStatus>>({});
   const { isSyncing, startSync } = useSyncStore();
 
   const load = useCallback(async () => {
-    const all = await getAssignments();
+    const [all, statusMap] = await Promise.all([getAssignments(), getAllQuoteQueueStatusMap()]);
     setRows(all.filter((a) => a.quote_data !== null));
+    setSyncStatusMap(statusMap);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -79,12 +81,17 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
             {quote !== null && (
               <>
                 <HeightSpacer height={4} />
-                <ReusableText
-                  text={`GHS ${quote.priceGhs} · ${quote.availability}`}
-                  family="regular"
-                  size={SIZES.small}
-                  color={COLORS.gray2}
-                />
+                <View style={styles.quoteRow}>
+                  <ReusableText
+                    text={`GHS ${quote.priceGhs} · ${quote.availability}`}
+                    family="regular"
+                    size={SIZES.small}
+                    color={COLORS.gray2}
+                  />
+                  {syncStatusMap[item.id] != null && (
+                    <SyncStatusIcon status={syncStatusMap[item.id]} />
+                  )}
+                </View>
               </>
             )}
           </Card>
@@ -99,5 +106,6 @@ const styles = StyleSheet.create({
   list: { padding: 12, backgroundColor: COLORS.offwhite, flexGrow: 1 },
   emptyContainer: { alignItems: "center" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  quoteRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardSpacing: { marginBottom: 10 },
 });
