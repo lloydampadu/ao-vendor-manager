@@ -19,6 +19,14 @@ export type QuoteQueueItem = {
   created_at: string;
 };
 
+export type DeclineQueueItem = {
+  id: string;
+  assignment_id: string;
+  synced: number; // 0 or 1
+  error: string | null;
+  created_at: string;
+};
+
 let _db: SQLite.SQLiteDatabase | null = null;
 
 async function getDb() {
@@ -42,6 +50,13 @@ export async function initDb(): Promise<void> {
       id TEXT PRIMARY KEY,
       assignment_id TEXT NOT NULL,
       payload TEXT NOT NULL,
+      synced INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS decline_queue (
+      id TEXT PRIMARY KEY,
+      assignment_id TEXT NOT NULL,
       synced INTEGER DEFAULT 0,
       error TEXT,
       created_at TEXT NOT NULL
@@ -108,4 +123,34 @@ export async function markQuoteSynced(id: string): Promise<void> {
 export async function markQuoteError(id: string, error: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE quote_queue SET error = ? WHERE id = ?`, [error, id]);
+}
+
+export async function enqueueDecline(d: DeclineQueueItem): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT OR IGNORE INTO decline_queue (id, assignment_id, synced, error, created_at) VALUES (?, ?, ?, ?, ?)`,
+    [d.id, d.assignment_id, d.synced, d.error, d.created_at],
+  );
+}
+
+export async function getPendingDeclines(): Promise<DeclineQueueItem[]> {
+  const db = await getDb();
+  return db.getAllAsync<DeclineQueueItem>(
+    `SELECT * FROM decline_queue WHERE synced = 0 ORDER BY created_at ASC`,
+  );
+}
+
+export async function markDeclineSynced(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE decline_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+}
+
+export async function markDeclineError(id: string, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE decline_queue SET error = ? WHERE id = ?`, [error, id]);
+}
+
+export async function updateAssignmentStatus(id: string, status: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE assignments SET status = ? WHERE id = ?`, [status, id]);
 }

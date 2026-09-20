@@ -3,9 +3,11 @@ import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import NetInfo from '@react-native-community/netinfo';
 import { getToken, loadVendor } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { useAuthStore, type Vendor } from '@/store/auth-store';
+import { useSyncStore } from '@/store/sync-store';
 import { setupNotificationListeners } from '@/lib/notifications';
 import RootNavigator from './src/navigation/RootNavigator';
 import { OfflineBanner } from './components';
@@ -15,6 +17,7 @@ type VendorMe = { vendor: { id: string; name: string; phone: string; categories:
 
 export default function App(): React.JSX.Element {
   const { vendor, setAuth, setVendor, clearAuth } = useAuthStore();
+  const startSync = useSyncStore((s) => s.startSync);
   const [checking, setChecking] = useState(true);
   const navRef = useRef<NavigationContainerRef<ReactNavigation.RootParamList>>(null);
 
@@ -52,6 +55,18 @@ export default function App(): React.JSX.Element {
         setChecking(false);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    let wasOnline: boolean | null = null;
+    const unsub = NetInfo.addEventListener((state) => {
+      const online = !!state.isConnected;
+      if (wasOnline === false && online) {
+        startSync().catch(() => {});
+      }
+      wasOnline = online;
+    });
+    return unsub;
   }, []);
 
   useEffect(() => {

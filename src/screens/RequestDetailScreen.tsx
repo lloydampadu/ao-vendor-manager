@@ -5,11 +5,13 @@ import type { RouteProp } from "@react-navigation/native";
 import {
   getAssignment,
   enqueueQuote,
+  enqueueDecline,
+  updateAssignmentStatus,
   type Assignment,
   type QuoteQueueItem,
+  type DeclineQueueItem,
 } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { api } from "../../lib/api";
 import {
   StatusBadge,
   QuoteForm,
@@ -52,7 +54,6 @@ function makeId(): string {
 export default function RequestDetailScreen({ navigation, route }: Props): React.JSX.Element {
   const { assignmentId } = route.params;
   const [row, setRow] = useState<Assignment | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const { startSync } = useSyncStore();
 
   const load = useCallback(async () => {
@@ -94,16 +95,19 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
         style: "destructive",
         onPress: () => {
           void (async () => {
-            try {
-              setSubmitting(true);
-              await api.post(`/vendor/requests/${assignmentId}/decline`, {});
-              await startSync();
-              navigation.goBack();
-            } catch {
-              Alert.alert("Error", "Failed to decline. Check your connection and try again.");
-            } finally {
-              setSubmitting(false);
-            }
+            const item: DeclineQueueItem = {
+              id: makeId(),
+              assignment_id: row.id,
+              synced: 0,
+              error: null,
+              created_at: new Date().toISOString(),
+            };
+            await enqueueDecline(item);
+            await updateAssignmentStatus(row.id, "DECLINED");
+            startSync().catch(() => {});
+            Alert.alert("Decline saved", "It will sync automatically.", [
+              { text: "OK", onPress: () => navigation.goBack() },
+            ]);
           })();
         },
       },
@@ -178,7 +182,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <HeightSpacer height={8} />
           <ReusableBtn
             onPress={decline}
-            btnText={submitting ? "Declining…" : "I don't have this item"}
+            btnText="I don't have this item"
             backgroundColor="transparent"
             textColor={COLORS.primary}
             width="100%"

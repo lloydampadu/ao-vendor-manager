@@ -5,6 +5,9 @@ import {
   getPendingQuotes,
   markQuoteSynced,
   markQuoteError,
+  getPendingDeclines,
+  markDeclineSynced,
+  markDeclineError,
   type Assignment,
 } from "./db";
 
@@ -65,7 +68,25 @@ export async function pushPendingQuotes(): Promise<void> {
   }
 }
 
+export async function pushPendingDeclines(): Promise<void> {
+  const queue = await getPendingDeclines();
+  for (const item of queue) {
+    try {
+      await api.post(`/vendor/requests/${item.assignment_id}/decline`, {});
+      await markDeclineSynced(item.id);
+    } catch (err) {
+      const e = err as { status?: number; message?: string };
+      if (e.status === 404 || e.status === 409) {
+        await markDeclineSynced(item.id);
+      } else {
+        await markDeclineError(item.id, e.message ?? "unknown error");
+      }
+    }
+  }
+}
+
 export async function sync(): Promise<void> {
   await pullAssignments();
   await pushPendingQuotes();
+  await pushPendingDeclines();
 }
