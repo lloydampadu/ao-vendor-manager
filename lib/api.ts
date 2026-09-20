@@ -22,8 +22,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       },
     });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw Object.assign(new Error((body as { error?: string }).error ?? `HTTP ${res.status}`), { status: res.status });
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      const raw = body.error ?? body.message ?? `HTTP ${res.status}`;
+      const msg = typeof raw === "string" ? raw : JSON.stringify(raw);
+      throw Object.assign(new Error(msg), { status: res.status });
     }
     return res.json() as Promise<T>;
   } catch (err) {
