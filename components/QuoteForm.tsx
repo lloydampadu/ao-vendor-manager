@@ -46,21 +46,27 @@ export function QuoteForm({ assignmentId: _assignmentId, onSubmit }: Props): Rea
     });
     if (result.canceled) return;
     const uri = result.assets[0].uri;
+    setLocalUris((p) => [...p, uri]);
     setUploading(true);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
     try {
+      if (!CLOUD_NAME) throw new Error("Cloudinary not configured");
       const form = new FormData();
       form.append("file", { uri, type: "image/jpeg", name: "photo.jpg" } as unknown as Blob);
       form.append("upload_preset", UPLOAD_PRESET);
       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-        method: "POST", body: form,
+        method: "POST", body: form, signal: controller.signal,
       });
-      const data = (await res.json()) as { secure_url?: string };
-      if (!data.secure_url) throw new Error("Upload failed");
+      const data = (await res.json()) as { secure_url?: string; error?: { message?: string } };
+      if (!data.secure_url) throw new Error(data.error?.message ?? "Upload failed");
       setPhotos((p) => [...p, data.secure_url as string]);
-      setLocalUris((p) => [...p, uri]);
     } catch (e) {
-      Alert.alert("Upload failed", (e as { message?: string }).message ?? "Unknown error");
+      setLocalUris((p) => p.filter((u) => u !== uri));
+      const msg = e instanceof Error ? (e.name === "AbortError" ? "Upload timed out — check your connection" : e.message) : "Unknown error";
+      Alert.alert("Upload failed", msg);
     } finally {
+      clearTimeout(timer);
       setUploading(false);
     }
   }

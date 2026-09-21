@@ -30,16 +30,27 @@ const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
 const UPLOAD_PRESET = "vendor_quotes";
 
 async function uploadToCloudinary(uri: string): Promise<string> {
-  const form = new FormData();
-  form.append("file", { uri, type: "image/jpeg", name: "photo.jpg" } as unknown as Blob);
-  form.append("upload_preset", UPLOAD_PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-    method: "POST",
-    body: form,
-  });
-  const data = await res.json() as { secure_url?: string };
-  if (!data.secure_url) throw new Error("Upload failed — no URL returned");
-  return data.secure_url;
+  if (!CLOUD_NAME) throw new Error("Cloudinary not configured");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const form = new FormData();
+    form.append("file", { uri, type: "image/jpeg", name: "photo.jpg" } as unknown as Blob);
+    form.append("upload_preset", UPLOAD_PRESET);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+    const data = await res.json() as { secure_url?: string; error?: { message?: string } };
+    if (!data.secure_url) throw new Error(data.error?.message ?? "Upload failed");
+    return data.secure_url;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw new Error("Upload timed out — check your connection");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export default function AddEditProductScreen(): React.JSX.Element {
@@ -73,9 +84,9 @@ export default function AddEditProductScreen(): React.JSX.Element {
     try {
       const url = await uploadToCloudinary(localUri);
       setPhotos((prev) => [...prev, url]);
-    } catch {
+    } catch (e) {
       setLocalUris((prev) => prev.filter((u) => u !== localUri));
-      Alert.alert("Upload failed", "Could not upload photo");
+      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
     } finally {
       setUploading(false);
     }
