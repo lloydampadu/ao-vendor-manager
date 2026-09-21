@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Animated, StyleSheet } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
-import { ReusableText } from "./index";
+import ReusableText from "./Reusable/ReusableText";
 import { COLORS } from "../constants/theme";
 
 export function OfflineBanner() {
