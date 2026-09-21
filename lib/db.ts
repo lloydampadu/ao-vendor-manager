@@ -186,14 +186,16 @@ export async function updateAssignmentStatus(id: string, status: string): Promis
 
 export async function cacheProducts(products: unknown[]): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`DELETE FROM products_cache`);
-  for (const p of products) {
-    const row = p as { id: string };
-    await db.runAsync(
-      `INSERT INTO products_cache (id, data) VALUES (?, ?)`,
-      [row.id, JSON.stringify(p)],
-    );
-  }
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM products_cache`);
+    for (const p of products) {
+      const row = p as { id: string };
+      await db.runAsync(
+        `INSERT INTO products_cache (id, data) VALUES (?, ?)`,
+        [row.id, JSON.stringify(p)],
+      );
+    }
+  });
 }
 
 export async function getCachedProducts<T>(): Promise<T[]> {
