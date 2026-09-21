@@ -15,7 +15,7 @@ const NetworkImage = ({ source, width, height, radius = 0 }: Props) => {
       source={source}
       style={{ width: width as DimensionValue, height, borderRadius: radius }}
       contentFit="cover"
-      cachePolicy="disk"
+      cachePolicy="memory-disk"
       transition={150}
     />
   );
