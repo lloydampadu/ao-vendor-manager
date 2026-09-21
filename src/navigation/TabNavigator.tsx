@@ -1,6 +1,8 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, AntDesign } from '@expo/vector-icons';
 import InboxStackNavigator from './InboxStackNavigator';
 import QuotesScreen from '../screens/QuotesScreen';
@@ -20,6 +22,9 @@ export type TabParamList = {
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Platform.OS === 'android' ? Math.max(insets.bottom, 8) : 8;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -36,7 +41,8 @@ export default function TabNavigator(): React.JSX.Element {
           borderTopWidth: 1,
           borderTopColor: COLORS.gray,
           paddingTop: 8,
-          paddingBottom: 8,
+          paddingBottom: bottomPad,
+          height: 56 + bottomPad,
         },
       }}
     >
