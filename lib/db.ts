@@ -61,6 +61,10 @@ export async function initDb(): Promise<void> {
       error TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS products_cache (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL
+    );
   `);
 }
 
@@ -178,4 +182,22 @@ export async function getAllQuoteQueueStatusMap(): Promise<Record<string, QuoteS
 export async function updateAssignmentStatus(id: string, status: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE assignments SET status = ? WHERE id = ?`, [status, id]);
+}
+
+export async function cacheProducts(products: unknown[]): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM products_cache`);
+  for (const p of products) {
+    const row = p as { id: string };
+    await db.runAsync(
+      `INSERT INTO products_cache (id, data) VALUES (?, ?)`,
+      [row.id, JSON.stringify(p)],
+    );
+  }
+}
+
+export async function getCachedProducts<T>(): Promise<T[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string; data: string }>(`SELECT data FROM products_cache`);
+  return rows.map((r) => JSON.parse(r.data) as T);
 }

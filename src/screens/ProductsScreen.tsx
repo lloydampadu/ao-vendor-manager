@@ -12,6 +12,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { initDb, cacheProducts, getCachedProducts } from "@/lib/db";
 import { ReusableText, HeightSpacer } from "../../components";
 import { COLORS, SIZES, SHADOWS } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
@@ -46,17 +47,28 @@ export default function ProductsScreen(): React.JSX.Element {
 
   useFocusEffect(
     useCallback(() => {
-      void load();
+      void load(products.length === 0);
     }, [])
   );
 
-  async function load(): Promise<void> {
-    setLoading(true);
+  async function load(initial = false): Promise<void> {
+    await initDb();
+    if (initial) {
+      const cached = await getCachedProducts<Product>();
+      if (cached.length > 0) {
+        setProducts(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
     try {
       const { products: p } = await api.get<{ products: Product[] }>("/vendor/products");
       setProducts(p);
+      await cacheProducts(p);
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Could not load products");
+      if (products.length === 0)
+        Alert.alert("Error", e instanceof Error ? e.message : "Could not load products");
     } finally {
       setLoading(false);
     }

@@ -35,21 +35,28 @@ export default function App(): React.JSX.Element {
         const token = await getToken();
         if (!token) return;
 
-        // Load cached vendor so the app opens immediately even if offline
+        // Load cached vendor and show the app immediately — no waiting for network
         const cachedRaw = await loadVendor();
         if (cachedRaw) {
-          const cached = JSON.parse(cachedRaw) as Vendor;
-          setVendor(cached);
+          setVendor(JSON.parse(cachedRaw) as Vendor);
+          setChecking(false); // unblock UI right away
+
+          // Refresh from server in the background
+          api.get<VendorMe>('/vendor-auth/me')
+            .then(({ vendor: v }) => setAuth(token, v))
+            .catch(async (err) => {
+              if ((err as { status?: number }).status === 401) await clearAuth();
+            });
+          return; // checking already set to false above
         }
 
-        // Refresh from server; only log out on explicit 401
+        // No cache — must wait for server (first login)
         try {
           const { vendor: v } = await api.get<VendorMe>('/vendor-auth/me');
           await setAuth(token, v);
         } catch (err) {
           const e = err as { status?: number };
           if (e.status === 401) await clearAuth();
-          // Network error — keep cached vendor, stay logged in
         }
       } finally {
         setChecking(false);
