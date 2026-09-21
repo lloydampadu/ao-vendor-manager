@@ -13,6 +13,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { api } from "@/lib/api";
+import { uploadImage } from "@/lib/upload";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { COLORS, SIZES } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
@@ -26,32 +27,6 @@ const CONDITION_LABEL: Record<Product["condition"], string> = {
   USED: "Used",
   REFURBISHED: "Refurbished",
 };
-const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
-const UPLOAD_PRESET = "vendor_quotes";
-
-async function uploadToCloudinary(uri: string): Promise<string> {
-  if (!CLOUD_NAME) throw new Error("Cloudinary not configured");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
-  try {
-    const form = new FormData();
-    form.append("file", { uri, type: "image/jpeg", name: "photo.jpg" } as unknown as Blob);
-    form.append("upload_preset", UPLOAD_PRESET);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-      method: "POST",
-      body: form,
-      signal: controller.signal,
-    });
-    const data = await res.json() as { secure_url?: string; error?: { message?: string } };
-    if (!data.secure_url) throw new Error(data.error?.message ?? "Upload failed");
-    return data.secure_url;
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") throw new Error("Upload timed out — check your connection");
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export default function AddEditProductScreen(): React.JSX.Element {
   const nav = useNavigation();
@@ -82,7 +57,7 @@ export default function AddEditProductScreen(): React.JSX.Element {
     setLocalUris((prev) => [...prev, localUri]);
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(localUri);
+      const url = await uploadImage(localUri);
       setPhotos((prev) => [...prev, url]);
     } catch (e) {
       setLocalUris((prev) => prev.filter((u) => u !== localUri));

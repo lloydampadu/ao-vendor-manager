@@ -6,6 +6,7 @@ import ReusableBtn from "./Reusable/ReusableBtn";
 import NetworkImage from "./Reusable/NetworkImage";
 import HeightSpacer from "./Reusable/HeightSpacer";
 import { COLORS, SIZES } from "../constants/theme";
+import { uploadImage } from "../lib/upload";
 
 const AVAILABILITY_OPTIONS = [
   "In stock",
@@ -13,9 +14,6 @@ const AVAILABILITY_OPTIONS = [
   "Can source in 2–3 days",
   "Can source in 1 week",
 ];
-
-const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
-const UPLOAD_PRESET = "vendor_quotes";
 
 type QuotePayload = {
   priceGhs: number;
@@ -48,25 +46,13 @@ export function QuoteForm({ assignmentId: _assignmentId, onSubmit }: Props): Rea
     const uri = result.assets[0].uri;
     setLocalUris((p) => [...p, uri]);
     setUploading(true);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
     try {
-      if (!CLOUD_NAME) throw new Error("Cloudinary not configured");
-      const form = new FormData();
-      form.append("file", { uri, type: "image/jpeg", name: "photo.jpg" } as unknown as Blob);
-      form.append("upload_preset", UPLOAD_PRESET);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-        method: "POST", body: form, signal: controller.signal,
-      });
-      const data = (await res.json()) as { secure_url?: string; error?: { message?: string } };
-      if (!data.secure_url) throw new Error(data.error?.message ?? "Upload failed");
-      setPhotos((p) => [...p, data.secure_url as string]);
+      const url = await uploadImage(uri);
+      setPhotos((p) => [...p, url]);
     } catch (e) {
       setLocalUris((p) => p.filter((u) => u !== uri));
-      const msg = e instanceof Error ? (e.name === "AbortError" ? "Upload timed out — check your connection" : e.message) : "Unknown error";
-      Alert.alert("Upload failed", msg);
+      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
     } finally {
-      clearTimeout(timer);
       setUploading(false);
     }
   }
