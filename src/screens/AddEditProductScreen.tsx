@@ -37,7 +37,8 @@ async function uploadToCloudinary(uri: string): Promise<string> {
     method: "POST",
     body: form,
   });
-  const data = await res.json() as { secure_url: string };
+  const data = await res.json() as { secure_url?: string };
+  if (!data.secure_url) throw new Error("Upload failed — no URL returned");
   return data.secure_url;
 }
 
@@ -85,9 +86,10 @@ export default function AddEditProductScreen(): React.JSX.Element {
     const priceGhs = parseInt(price, 10);
     if (!priceGhs || priceGhs <= 0) { Alert.alert("Enter a valid price"); return; }
 
+    if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
     setSaving(true);
     try {
-      const body = { name: name.trim(), priceGhs, condition, description: description.trim() || undefined, photos, inStock };
+      const body = { name: name.trim(), priceGhs, condition, description: description.trim() || undefined, photos: photos.filter(Boolean), inStock };
       if (existing) {
         await api.patch(`/vendor/products/${existing.id}`, body);
       } else {
@@ -199,8 +201,8 @@ export default function AddEditProductScreen(): React.JSX.Element {
       <HeightSpacer height={4} />
       <ReusableBtn
         onPress={() => void save()}
-        btnText={saving ? "Saving…" : existing ? "Save Changes" : "Add Product"}
-        backgroundColor={saving ? COLORS.gray2 : COLORS.primary}
+        btnText={saving ? "Saving…" : uploading ? "Uploading photo…" : existing ? "Save Changes" : "Add Product"}
+        backgroundColor={saving || uploading ? COLORS.gray2 : COLORS.primary}
         textColor={COLORS.white}
         width="100%"
         height={52}
