@@ -1,16 +1,25 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuthStore } from "../../store/auth-store";
+import { api } from "@/lib/api";
 import { Card, ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { COLORS, SIZES } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
+type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[] } };
+
 export default function ProfileScreen(): React.JSX.Element {
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { vendor, clearAuth } = useAuthStore();
+  const { vendor, setVendor, clearAuth } = useAuthStore();
+
+  useEffect(() => {
+    api.get<VendorMe>("/vendor-auth/me")
+      .then(({ vendor: v }) => setVendor(v))
+      .catch(() => {});
+  }, []);
 
   function logout(): void {
     Alert.alert("Log out", "Are you sure?", [
