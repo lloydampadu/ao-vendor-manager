@@ -18,11 +18,11 @@ type Segment = (typeof SEGMENTS)[number];
 
 type RequestData = {
   partName: string;
-  makeModel?: string | null;
+  make?: string | null;
+  model?: string | null;
   year?: number | null;
-  tyreSize?: string | null;
   notes?: string | null;
-  type?: string | null;
+  items?: { id: string; partName: string }[];
 };
 
 export default function InboxScreen({ navigation }: Props): React.JSX.Element {
