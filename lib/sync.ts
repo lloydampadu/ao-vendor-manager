@@ -1,4 +1,3 @@
-import * as SecureStore from "expo-secure-store";
 import { api } from "./api";
 import {
   upsertAssignment,
@@ -11,40 +10,32 @@ import {
   type Assignment,
 } from "./db";
 
-const LAST_SYNC_KEY = "last_sync_at";
-
 type ApiAssignment = {
   id: string;
-  request_id: string;
+  requestId: string;
   status: string;
-  notified_at: string | null;
-  updated_at: string;
+  notifiedAt: string | null;
+  updatedAt: string;
   request: object;
   quote: object | null;
 };
 
 export async function pullAssignments(): Promise<void> {
-  const lastSync = await SecureStore.getItemAsync(LAST_SYNC_KEY);
-  const path = lastSync
-    ? `/vendor/requests?updatedSince=${encodeURIComponent(lastSync)}`
-    : "/vendor/requests";
-
-  const { assignments } = await api.get<{ assignments: ApiAssignment[] }>(path);
+  const { assignments } = await api.get<{ assignments: ApiAssignment[] }>("/vendor/requests");
 
   for (const a of assignments) {
     const row: Assignment = {
       id: a.id,
-      request_id: a.request_id,
+      request_id: a.requestId,
       status: a.status,
-      notified_at: a.notified_at,
-      updated_at: a.updated_at,
+      notified_at: a.notifiedAt ?? null,
+      updated_at: a.updatedAt,
       request_data: JSON.stringify(a.request),
       quote_data: a.quote ? JSON.stringify(a.quote) : null,
     };
     await upsertAssignment(row);
   }
 
-  await SecureStore.setItemAsync(LAST_SYNC_KEY, new Date().toISOString());
 }
 
 export async function pushPendingQuotes(): Promise<void> {
