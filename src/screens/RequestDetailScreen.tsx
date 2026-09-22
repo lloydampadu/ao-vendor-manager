@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
-import { Image } from "expo-image";
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import ImageViewing from "react-native-image-viewing";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
@@ -88,7 +88,8 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
   const [row, setRow] = useState<Assignment | null>(null);
   const [quoteSyncStatus, setQuoteSyncStatus] = useState<QuoteSyncStatus | null>(null);
   const [editingQuote, setEditingQuote] = useState(false);
-  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
   const { startSync } = useSyncStore();
 
   const load = useCallback(async () => {
@@ -216,7 +217,12 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             <HeightSpacer height={10} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {req.photos.map((uri, i) => (
-                <TouchableOpacity key={i} onPress={() => setLightboxUri(uri)} style={{ marginRight: 8 }} activeOpacity={0.8}>
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => { setLightboxIndex(i); setLightboxVisible(true); }}
+                  style={{ marginRight: 8 }}
+                  activeOpacity={0.8}
+                >
                   <NetworkImage source={uri} width={100} height={100} radius={6} />
                 </TouchableOpacity>
               ))}
@@ -373,20 +379,14 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
 
     </ScrollView>
 
-    {/* Full-screen image lightbox */}
-    <Modal visible={lightboxUri !== null} transparent animationType="fade" onRequestClose={() => setLightboxUri(null)}>
-      <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxUri(null)}>
-        <Image
-          source={lightboxUri ?? ""}
-          style={styles.lightboxImage}
-          contentFit="contain"
-          cachePolicy="disk"
-        />
-        <View style={styles.lightboxClose}>
-          <Ionicons name="close-circle" size={36} color="#fff" />
-        </View>
-      </Pressable>
-    </Modal>
+    <ImageViewing
+      images={(req.photos ?? []).map((uri) => ({ uri }))}
+      imageIndex={lightboxIndex}
+      visible={lightboxVisible}
+      onRequestClose={() => setLightboxVisible(false)}
+      swipeToCloseEnabled
+      doubleTapToZoomEnabled
+    />
     </>
   );
 }
@@ -398,19 +398,4 @@ const styles = StyleSheet.create({
   countdownRow: { flexDirection: "row", alignItems: "center" },
   wonCard: { backgroundColor: "#D4EDDA", borderColor: "#c3e6cb", borderWidth: 1 },
   closedCard: { backgroundColor: COLORS.offwhite },
-  lightboxBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.92)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  lightboxImage: {
-    width: "100%",
-    height: "80%",
-  },
-  lightboxClose: {
-    position: "absolute",
-    top: 52,
-    right: 20,
-  },
 });
