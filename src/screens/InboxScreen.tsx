@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import * as Notifications from "expo-notifications";
+import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getAssignments, initDb, type Assignment } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { RequestCard, ReusableText, HeightSpacer } from "../../components";
+import { RequestCard, ReusableText, HeightSpacer, InboxSkeletonList } from "../../components";
 import { COLORS, SIZES } from "../../constants/theme";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
 
@@ -26,16 +27,30 @@ type RequestData = {
 
 export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [segment, setSegment] = useState<Segment>("PENDING");
   const { isSyncing, startSync } = useSyncStore();
+  const loadedSegments = useRef(new Set<Segment>());
+  const isFocused = useIsFocused();
 
   const load = useCallback(async () => {
+    if (!loadedSegments.current.has(segment)) {
+      setLoading(true);
+    }
     await initDb();
     const rows = await getAssignments(segment);
     setAssignments(rows);
+    loadedSegments.current.add(segment);
+    setLoading(false);
   }, [segment]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Sync from server every time the inbox comes into focus
+  useEffect(() => {
+    if (!isFocused) return;
+    startSync().then(() => load()).catch(() => {});
+  }, [isFocused]);
 
   // Clear badge when inbox is opened
   useEffect(() => {
@@ -71,7 +86,11 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
         ))}
       </View>
 
-      <FlatList
+      {loading ? (
+        <ScrollView>
+          <InboxSkeletonList />
+        </ScrollView>
+      ) : <FlatList
         data={assignments}
         keyExtractor={(a) => a.id}
         contentContainerStyle={styles.list}
@@ -113,7 +132,7 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
             />
           );
         }}
-      />
+      />}
     </View>
   );
 }

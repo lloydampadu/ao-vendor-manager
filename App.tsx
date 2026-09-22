@@ -13,7 +13,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { OfflineBanner } from './components';
 import { COLORS } from './constants/theme';
 
-type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[] } };
+type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] } };
 
 export default function App(): React.JSX.Element {
   const { vendor, setAuth, setVendor, clearAuth } = useAuthStore();
@@ -41,19 +41,20 @@ export default function App(): React.JSX.Element {
           setVendor(JSON.parse(cachedRaw) as Vendor);
           setChecking(false); // unblock UI right away
 
-          // Refresh from server in the background
+          // Refresh profile + sync assignments in the background
           api.get<VendorMe>('/vendor-auth/me')
-            .then(({ vendor: v }) => setAuth(token, v))
+            .then(({ vendor: v }) => setAuth(token, { ...v, specialties: v.specialties ?? [], brands: v.brands ?? [] }))
             .catch(async (err) => {
               if ((err as { status?: number }).status === 401) await clearAuth();
             });
+          startSync().catch(() => {});
           return; // checking already set to false above
         }
 
         // No cache — must wait for server (first login)
         try {
           const { vendor: v } = await api.get<VendorMe>('/vendor-auth/me');
-          await setAuth(token, v);
+          await setAuth(token, { ...v, specialties: v.specialties ?? [], brands: v.brands ?? [] });
         } catch (err) {
           const e = err as { status?: number };
           if (e.status === 401) await clearAuth();
