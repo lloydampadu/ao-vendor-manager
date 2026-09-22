@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
+import * as Notifications from "expo-notifications";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getAssignments, initDb, type Assignment } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
@@ -35,6 +36,11 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   }, [segment]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Clear badge when inbox is opened
+  useEffect(() => {
+    void Notifications.setBadgeCountAsync(0);
+  }, []);
 
   const onRefresh = useCallback(async () => {
     await startSync();
