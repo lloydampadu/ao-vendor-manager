@@ -78,11 +78,19 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <HeightSpacer height={40} />
+            <ReusableText text="📭" family="regular" size={48} color={COLORS.gray2} />
+            <HeightSpacer height={12} />
             <ReusableText
-              text={`No ${segment.toLowerCase()} requests`}
-              family="regular"
+              text={segment === "PENDING" ? "No new requests" : segment === "QUOTED" ? "No quotes submitted yet" : "No declined requests"}
+              family="medium"
               size={SIZES.medium}
+              color={COLORS.secondary}
+            />
+            <HeightSpacer height={6} />
+            <ReusableText
+              text={segment === "PENDING" ? "Pull down to refresh for new jobs" : "Quoted jobs will appear here"}
+              family="regular"
+              size={SIZES.small}
               color={COLORS.gray2}
             />
           </View>
@@ -112,8 +120,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.gray,
   },
-  seg: { flex: 1, paddingVertical: 12, alignItems: "center" },
+  seg: { flex: 1, paddingVertical: 16, alignItems: "center" },
   segActive: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
   list: { padding: 12, flexGrow: 1 },
-  emptyContainer: { alignItems: "center" },
+  emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
 });

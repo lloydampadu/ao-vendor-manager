@@ -54,8 +54,11 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
       }
       ListEmptyComponent={
         <View style={styles.emptyContainer}>
-          <HeightSpacer height={40} />
-          <ReusableText text="No submitted quotes yet" family="regular" size={SIZES.medium} color={COLORS.gray2} />
+          <ReusableText text="📋" family="regular" size={48} color={COLORS.gray2} />
+          <HeightSpacer height={12} />
+          <ReusableText text="No quotes yet" family="medium" size={SIZES.medium} color={COLORS.secondary} />
+          <HeightSpacer height={6} />
+          <ReusableText text="When you submit a quote it will appear here" family="regular" size={SIZES.small} color={COLORS.gray2} />
         </View>
       }
       renderItem={({ item }) => {
@@ -104,7 +107,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
 
 const styles = StyleSheet.create({
   list: { padding: 12, backgroundColor: COLORS.offwhite, flexGrow: 1 },
-  emptyContainer: { alignItems: "center" },
+  emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   quoteRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardSpacing: { marginBottom: 10 },
