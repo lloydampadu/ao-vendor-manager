@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import {
@@ -13,6 +15,7 @@ import {
   type DeclineQueueItem,
   type QuoteSyncStatus,
 } from "../../lib/db";
+import { api } from "@/lib/api";
 import { useSyncStore } from "../../store/sync-store";
 import {
   StatusBadge,
@@ -24,6 +27,7 @@ import {
   HeightSpacer,
   WidthSpacer,
   SyncStatusIcon,
+  RequestDetailSkeleton,
 } from "../../components";
 import { COLORS, SIZES } from "../../constants/theme";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
@@ -41,6 +45,7 @@ type RequestData = {
   engine?: string;
   notes?: string;
   photos?: string[];
+  createdAt?: string;
 };
 
 type QuoteData = {
@@ -54,10 +59,36 @@ function makeId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+const EXPIRE_DAYS = 5;
+
+function useCountdown(createdAt?: string): string | null {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!createdAt) return;
+    const update = () => {
+      const expiry = new Date(createdAt).getTime() + EXPIRE_DAYS * 24 * 60 * 60 * 1000;
+      const ms = expiry - Date.now();
+      if (ms <= 0) { setLabel("Expired"); return; }
+      const h = Math.floor(ms / 3_600_000);
+      const m = Math.floor((ms % 3_600_000) / 60_000);
+      if (h >= 24) setLabel(`${Math.floor(h / 24)}d ${h % 24}h left`);
+      else setLabel(`${h}h ${m}m left`);
+    };
+    update();
+    const t = setInterval(update, 60_000);
+    return () => clearInterval(t);
+  }, [createdAt]);
+
+  return label;
+}
+
 export default function RequestDetailScreen({ navigation, route }: Props): React.JSX.Element {
   const { assignmentId } = route.params;
   const [row, setRow] = useState<Assignment | null>(null);
   const [quoteSyncStatus, setQuoteSyncStatus] = useState<QuoteSyncStatus | null>(null);
+  const [editingQuote, setEditingQuote] = useState(false);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const { startSync } = useSyncStore();
 
   const load = useCallback(async () => {
@@ -73,12 +104,14 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
 
   useEffect(() => { void load(); }, [load]);
 
-  async function submitQuote(payload: {
-    priceGhs: number;
-    availability: string;
-    notes?: string;
-    photos: string[];
-  }) {
+  const req: RequestData = row ? JSON.parse(row.request_data) as RequestData : { partName: "" };
+  const quote: QuoteData | null = row?.quote_data ? JSON.parse(row.quote_data) as QuoteData : null;
+  const countdown = useCountdown(row?.status === "PENDING" || row?.status === "QUOTED" ? req.createdAt : undefined);
+  const car = [req.make, req.model, req.year != null ? String(req.year) : undefined]
+    .filter((v): v is string => Boolean(v))
+    .join(" ");
+
+  async function submitQuote(payload: { priceGhs: number; availability: string; notes?: string; photos: string[] }) {
     if (!row) return;
     const item: QuoteQueueItem = {
       id: makeId(),
@@ -90,10 +123,24 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
     };
     await enqueueQuote(item);
     await load();
+    setEditingQuote(false);
     startSync().catch(() => {});
     Alert.alert("Quote saved", "It will sync automatically.", [
       { text: "OK", onPress: () => navigation.goBack() },
     ]);
+  }
+
+  async function updateQuote(payload: { priceGhs: number; availability: string; notes?: string; photos: string[] }) {
+    if (!row) return;
+    try {
+      await api.put(`/vendor/requests/${row.id}/quote`, payload);
+      await updateAssignmentStatus(row.id, "QUOTED");
+      await load();
+      setEditingQuote(false);
+      Alert.alert("Quote updated", "Your changes have been saved.");
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Could not update quote");
+    }
   }
 
   function decline() {
@@ -126,19 +173,14 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
 
   if (!row) {
     return (
-      <View style={styles.center}>
-        <ReusableText text="Loading…" family="regular" size={SIZES.medium} color={COLORS.gray2} />
-      </View>
+      <ScrollView style={styles.scroll}>
+        <RequestDetailSkeleton />
+      </ScrollView>
     );
   }
 
-  const req = JSON.parse(row.request_data) as RequestData;
-  const quote: QuoteData | null = row.quote_data ? (JSON.parse(row.quote_data) as QuoteData) : null;
-  const car = [req.make, req.model, req.year != null ? String(req.year) : undefined]
-    .filter((v): v is string => Boolean(v))
-    .join(" ");
-
   return (
+    <>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
       {/* Request info */}
@@ -174,19 +216,62 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             <HeightSpacer height={10} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {req.photos.map((uri, i) => (
-                <View key={i} style={{ marginRight: 8 }}>
+                <TouchableOpacity key={i} onPress={() => setLightboxUri(uri)} style={{ marginRight: 8 }} activeOpacity={0.8}>
                   <NetworkImage source={uri} width={100} height={100} radius={6} />
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </>
         )}
+
+        {/* Countdown timer */}
+        {countdown && (
+          <>
+            <HeightSpacer height={10} />
+            <View style={styles.countdownRow}>
+              <Ionicons name="time-outline" size={14} color={COLORS.gray2} />
+              <WidthSpacer width={4} />
+              <ReusableText text={countdown} family="regular" size={SIZES.small} color={COLORS.gray2} />
+            </View>
+          </>
+        )}
       </Card>
+
+      {/* SELECTED: won! */}
+      {row.status === "SELECTED" && (
+        <>
+          <Card style={styles.wonCard}>
+            <ReusableText text="🎉 Your quote was selected!" family="bold" size={17} color="#155724" />
+            <HeightSpacer height={6} />
+            <ReusableText
+              text="The customer chose your quote. Prepare the item and await their collection or delivery arrangement."
+              family="regular"
+              size={SIZES.small}
+              color="#155724"
+            />
+          </Card>
+          {quote && (
+            <Card>
+              <ReusableText text="Your winning quote" family="bold" size={15} color={COLORS.secondary} />
+              <HeightSpacer height={8} />
+              <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={22} color={COLORS.primary} />
+              <HeightSpacer height={4} />
+              <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+              {quote.notes && (
+                <>
+                  <HeightSpacer height={4} />
+                  <ReusableText text={quote.notes} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+                </>
+              )}
+            </Card>
+          )}
+        </>
+      )}
 
       {/* PENDING: quote form */}
       {row.status === "PENDING" && (
         <Card>
-          <ReusableText text="Your Quote" family="bold" size={16} color={COLORS.secondary} />
+          <ReusableText text="Submit Your Quote" family="bold" size={16} color={COLORS.secondary} />
           <HeightSpacer height={12} />
           <QuoteForm assignmentId={row.id} onSubmit={(payload) => submitQuote(payload)} />
           <HeightSpacer height={8} />
@@ -203,21 +288,21 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
         </Card>
       )}
 
-      {/* QUOTED: read-only quote */}
-      {row.status === "QUOTED" && quote !== null && (
+      {/* QUOTED: read-only + edit option */}
+      {row.status === "QUOTED" && quote !== null && !editingQuote && (
         <Card>
           <View style={styles.row}>
             <ReusableText text="Your submitted quote" family="bold" size={16} color={COLORS.secondary} />
             {quoteSyncStatus != null && <SyncStatusIcon status={quoteSyncStatus} />}
           </View>
           <HeightSpacer height={8} />
-          <ReusableText text={`Price: GHS ${quote.priceGhs}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+          <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={COLORS.primary} />
           <HeightSpacer height={4} />
-          <ReusableText text={`Availability: ${quote.availability}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+          <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
           {quote.notes && (
             <>
               <HeightSpacer height={4} />
-              <ReusableText text={`Notes: ${quote.notes}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+              <ReusableText text={quote.notes} family="regular" size={SIZES.medium} color={COLORS.gray2} />
             </>
           )}
           {quote.photos && quote.photos.length > 0 && (
@@ -232,12 +317,51 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
               </ScrollView>
             </>
           )}
+          <HeightSpacer height={12} />
+          <ReusableBtn
+            onPress={() => setEditingQuote(true)}
+            btnText="Edit Quote"
+            backgroundColor={COLORS.white}
+            textColor={COLORS.primary}
+            width="100%"
+            height={44}
+            borderRadius={8}
+            borderWidth={1.5}
+            borderColor={COLORS.primary}
+            fontSize={SIZES.small}
+          />
+        </Card>
+      )}
+
+      {/* QUOTED: edit form */}
+      {row.status === "QUOTED" && editingQuote && (
+        <Card>
+          <View style={styles.row}>
+            <ReusableText text="Edit Your Quote" family="bold" size={16} color={COLORS.secondary} />
+            <ReusableBtn
+              onPress={() => setEditingQuote(false)}
+              btnText="Cancel"
+              backgroundColor="transparent"
+              textColor={COLORS.gray2}
+              width={60}
+              height={32}
+              borderRadius={8}
+              fontSize={SIZES.small}
+            />
+          </View>
+          <HeightSpacer height={12} />
+          <QuoteForm
+            assignmentId={row.id}
+            initialValues={quote ?? undefined}
+            onSubmit={(payload) => updateQuote(payload)}
+            submitLabel="Save Changes"
+          />
         </Card>
       )}
 
       {/* EXPIRED / DECLINED */}
       {(row.status === "EXPIRED" || row.status === "DECLINED") && (
-        <Card style={{ backgroundColor: COLORS.offwhite }}>
+        <Card style={styles.closedCard}>
           <ReusableText
             text={row.status === "EXPIRED" ? "This request has closed." : "You declined this request."}
             family="regular"
@@ -248,12 +372,45 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       )}
 
     </ScrollView>
+
+    {/* Full-screen image lightbox */}
+    <Modal visible={lightboxUri !== null} transparent animationType="fade" onRequestClose={() => setLightboxUri(null)}>
+      <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxUri(null)}>
+        <Image
+          source={lightboxUri ?? ""}
+          style={styles.lightboxImage}
+          contentFit="contain"
+          cachePolicy="disk"
+        />
+        <View style={styles.lightboxClose}>
+          <Ionicons name="close-circle" size={36} color="#fff" />
+        </View>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: COLORS.offwhite },
   content: { padding: 12, gap: 12 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  countdownRow: { flexDirection: "row", alignItems: "center" },
+  wonCard: { backgroundColor: "#D4EDDA", borderColor: "#c3e6cb", borderWidth: 1 },
+  closedCard: { backgroundColor: COLORS.offwhite },
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lightboxImage: {
+    width: "100%",
+    height: "80%",
+  },
+  lightboxClose: {
+    position: "absolute",
+    top: 52,
+    right: 20,
+  },
 });
