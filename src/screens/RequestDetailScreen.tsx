@@ -51,7 +51,6 @@ type RequestData = {
 type QuoteData = {
   priceGhs: number;
   availability: string;
-  notes?: string;
   photos?: string[];
 };
 
@@ -100,6 +99,20 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
     setRow(assignment);
     if (queueItem) {
       setQuoteSyncStatus(queueItem.synced ? "synced" : queueItem.error ? "error" : "pending");
+    }
+    // Always fetch live from API so fee_paid status is never stale.
+    try {
+      const { assignment: live } = await api.get<{ assignment: { request: { status?: string }; [key: string]: unknown } }>(`/vendor/requests/${assignmentId}`);
+      if (live && assignment) {
+        const feePaidNow = live.request?.status !== "AWAITING_PAYMENT" ? 1 : 0;
+        if (feePaidNow !== assignment.fee_paid) {
+          const { upsertAssignment } = await import("../../lib/db");
+          await upsertAssignment({ ...assignment, fee_paid: feePaidNow });
+          setRow((prev) => prev ? { ...prev, fee_paid: feePaidNow } : prev);
+        }
+      }
+    } catch {
+      // Live fetch is best-effort; cached value is fine if offline.
     }
   }, [assignmentId]);
 
@@ -263,12 +276,6 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
               <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={22} color={COLORS.primary} />
               <HeightSpacer height={4} />
               <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
-              {quote.notes && (
-                <>
-                  <HeightSpacer height={4} />
-                  <ReusableText text={quote.notes} family="regular" size={SIZES.medium} color={COLORS.gray2} />
-                </>
-              )}
             </Card>
           )}
         </>
@@ -279,7 +286,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
         <Card>
           <ReusableText text="Submit Your Quote" family="bold" size={16} color={COLORS.secondary} />
           <HeightSpacer height={12} />
-          <QuoteForm assignmentId={row.id} onSubmit={(payload) => submitQuote(payload)} />
+          <QuoteForm assignmentId={row.id} feePaid={row.fee_paid === 1} onSubmit={(payload) => submitQuote(payload)} />
           <HeightSpacer height={8} />
           <ReusableBtn
             onPress={decline}
@@ -305,22 +312,10 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={COLORS.primary} />
           <HeightSpacer height={4} />
           <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
-          {quote.notes && (
+          {quote.refPriceGhs != null && (
             <>
               <HeightSpacer height={4} />
-              <ReusableText text={quote.notes} family="regular" size={SIZES.medium} color={COLORS.gray2} />
-            </>
-          )}
-          {quote.photos && quote.photos.length > 0 && (
-            <>
-              <HeightSpacer height={10} />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {quote.photos.map((uri, i) => (
-                  <View key={i} style={{ marginRight: 8 }}>
-                    <NetworkImage source={uri} width={100} height={100} radius={6} />
-                  </View>
-                ))}
-              </ScrollView>
+              <ReusableText text={`Ref: GHS ${quote.refPriceGhs}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
             </>
           )}
           <HeightSpacer height={12} />
@@ -358,6 +353,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <HeightSpacer height={12} />
           <QuoteForm
             assignmentId={row.id}
+            feePaid={row.fee_paid === 1}
             initialValues={quote ?? undefined}
             onSubmit={(payload) => updateQuote(payload)}
             submitLabel="Save Changes"

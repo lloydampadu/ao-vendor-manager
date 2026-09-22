@@ -16,7 +16,7 @@ type ApiAssignment = {
   status: string;
   notifiedAt: string | null;
   updatedAt: string;
-  request: object;
+  request: { status?: string; [key: string]: unknown };
   quote: object | null;
 };
 
@@ -32,6 +32,7 @@ export async function pullAssignments(): Promise<void> {
       updated_at: a.updatedAt,
       request_data: JSON.stringify(a.request),
       quote_data: a.quote ? JSON.stringify(a.quote) : null,
+      fee_paid: a.request.status !== "AWAITING_PAYMENT" ? 1 : 0,
     };
     await upsertAssignment(row);
   }

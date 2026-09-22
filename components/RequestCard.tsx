@@ -27,9 +27,13 @@ type Props = {
 
 export function RequestCard({ status, requestData, updatedAt, onPress }: Props): React.JSX.Element {
   const vehicle = [requestData.make, requestData.model, requestData.year?.toString()].filter(Boolean).join(" ");
-  const ageHours = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 3_600_000);
+  const date = new Date(updatedAt);
+  const ageHours = Math.floor((Date.now() - date.getTime()) / 3_600_000);
   const urgent = status === "PENDING" && ageHours >= 24;
-  const timeLabel = ageHours < 1 ? "Just now" : `${ageHours}h ago`;
+  const timeLabel =
+    ageHours < 24
+      ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : date.toLocaleDateString([], { day: "numeric", month: "short" });
 
   // Show individual items if more than one, otherwise just the partName
   const items = requestData.items ?? [];

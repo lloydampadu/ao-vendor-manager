@@ -8,6 +8,7 @@ export type Assignment = {
   updated_at: string;
   request_data: string; // JSON blob
   quote_data: string | null; // JSON blob
+  fee_paid: number; // 1 if customer paid sourcing fee, 0 otherwise
 };
 
 export type QuoteQueueItem = {
@@ -36,6 +37,8 @@ async function getDb() {
 
 export async function initDb(): Promise<void> {
   const db = await getDb();
+  // Migrate existing installs that don't have fee_paid column yet.
+  await db.execAsync(`ALTER TABLE assignments ADD COLUMN fee_paid INTEGER NOT NULL DEFAULT 0`).catch(() => {});
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS assignments (
       id TEXT PRIMARY KEY,
@@ -44,7 +47,8 @@ export async function initDb(): Promise<void> {
       notified_at TEXT,
       updated_at TEXT NOT NULL,
       request_data TEXT NOT NULL,
-      quote_data TEXT
+      quote_data TEXT,
+      fee_paid INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS quote_queue (
       id TEXT PRIMARY KEY,
@@ -71,15 +75,16 @@ export async function initDb(): Promise<void> {
 export async function upsertAssignment(a: Assignment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO assignments (id, request_id, status, notified_at, updated_at, request_data, quote_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO assignments (id, request_id, status, notified_at, updated_at, request_data, quote_data, fee_paid)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        status = excluded.status,
        notified_at = excluded.notified_at,
        updated_at = excluded.updated_at,
        request_data = excluded.request_data,
-       quote_data = excluded.quote_data`,
-    [a.id, a.request_id, a.status, a.notified_at, a.updated_at, a.request_data, a.quote_data],
+       quote_data = excluded.quote_data,
+       fee_paid = excluded.fee_paid`,
+    [a.id, a.request_id, a.status, a.notified_at, a.updated_at, a.request_data, a.quote_data, a.fee_paid],
   );
 }
 

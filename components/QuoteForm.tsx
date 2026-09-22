@@ -1,56 +1,76 @@
 import React, { useState } from "react";
-import { View, TextInput, StyleSheet, Alert, ActivityIndicator, TouchableOpacity } from "react-native";
+import { Alert, ActivityIndicator, View, TextInput, StyleSheet, TouchableOpacity } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import ReusableText from "./Reusable/ReusableText";
 import ReusableBtn from "./Reusable/ReusableBtn";
 import NetworkImage from "./Reusable/NetworkImage";
 import HeightSpacer from "./Reusable/HeightSpacer";
 import { COLORS, SIZES } from "../constants/theme";
 import { uploadImage } from "../lib/upload";
+import { Ionicons } from "@expo/vector-icons";
 
-const AVAILABILITY_OPTIONS = [
-  "In stock",
-  "Can source in 1 day",
-  "Can source in 2–3 days",
-  "Can source in 1 week",
-];
+const CONDITION_OPTIONS = ["Brand New", "Home Used"] as const;
+type Condition = (typeof CONDITION_OPTIONS)[number];
 
-type QuotePayload = {
+export type QuotePayload = {
   priceGhs: number;
-  availability: string;
-  notes?: string;
+  availability: Condition;
   photos: string[];
+  location?: { latitude: number; longitude: number };
 };
 
 type Props = {
   assignmentId: string;
+  feePaid?: boolean;
   onSubmit: (payload: QuotePayload) => Promise<void>;
+  initialValues?: { priceGhs: number; availability: string; photos?: string[] };
+  submitLabel?: string;
 };
 
-export function QuoteForm({ assignmentId: _assignmentId, onSubmit }: Props): React.JSX.Element {
-  const [price, setPrice] = useState("");
-  const [availability, setAvailability] = useState(AVAILABILITY_OPTIONS[0]);
-  const [notes, setNotes] = useState("");
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [localUris, setLocalUris] = useState<string[]>([]);
+export function QuoteForm({ assignmentId: _assignmentId, feePaid = false, onSubmit, initialValues, submitLabel }: Props): React.JSX.Element {
+  const [price, setPrice] = useState(initialValues?.priceGhs != null ? String(initialValues.priceGhs) : "");
+  const [condition, setCondition] = useState<Condition>(
+    CONDITION_OPTIONS.includes(initialValues?.availability as Condition)
+      ? (initialValues!.availability as Condition)
+      : "Brand New"
+  );
+  const [photoUrl, setPhotoUrl] = useState<string | null>(initialValues?.photos?.[0] ?? null);
+  const [localUri, setLocalUri] = useState<string | null>(initialValues?.photos?.[0] ?? null);
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  async function pickPhoto() {
-    if (photos.length >= 4) { Alert.alert("Max 4 photos"); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
+  async function takePhoto() {
+    const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!camPerm.granted) {
+      Alert.alert("Camera permission required", "Please allow camera access to take a proof photo.");
+      return;
+    }
+    const locPerm = await Location.requestForegroundPermissionsAsync();
+
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
+      quality: 0.75,
     });
     if (result.canceled) return;
+
     const uri = result.assets[0].uri;
-    setLocalUris((p) => [...p, uri]);
+    setLocalUri(uri);
     setUploading(true);
+
+    // Capture location in parallel with upload.
+    if (locPerm.granted) {
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        .then((pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
+        .catch(() => {});
+    }
+
     try {
       const url = await uploadImage(uri);
-      setPhotos((p) => [...p, url]);
+      setPhotoUrl(url);
     } catch (e) {
-      setLocalUris((p) => p.filter((u) => u !== uri));
+      setLocalUri(null);
       Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
     } finally {
       setUploading(false);
@@ -60,9 +80,15 @@ export function QuoteForm({ assignmentId: _assignmentId, onSubmit }: Props): Rea
   async function submit() {
     const priceNum = parseInt(price, 10);
     if (!priceNum || priceNum <= 0) { Alert.alert("Enter a valid price in GHS"); return; }
+    if (feePaid && !photoUrl) { Alert.alert("Photo required", "Please take a photo of the item as proof."); return; }
     setSubmitting(true);
     try {
-      await onSubmit({ priceGhs: priceNum, availability, notes: notes.trim() || undefined, photos });
+      await onSubmit({
+        priceGhs: priceNum,
+        availability: condition,
+        photos: photoUrl ? [photoUrl] : [],
+        ...(location ? { location } : {}),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -82,61 +108,82 @@ export function QuoteForm({ assignmentId: _assignmentId, onSubmit }: Props): Rea
       />
 
       <HeightSpacer height={12} />
-      <ReusableText text="Availability" family="medium" size={SIZES.small} color={COLORS.secondary} />
+      <ReusableText text="Condition" family="medium" size={SIZES.small} color={COLORS.secondary} />
       <HeightSpacer height={6} />
-      {AVAILABILITY_OPTIONS.map((opt) => (
-        <TouchableOpacity
-          key={opt}
-          style={[styles.option, availability === opt && styles.optionActive]}
-          onPress={() => setAvailability(opt)}
-        >
-          <ReusableText
-            text={opt}
-            family={availability === opt ? "medium" : "regular"}
-            size={SIZES.small}
-            color={availability === opt ? COLORS.primary : COLORS.gray2}
-          />
-        </TouchableOpacity>
-      ))}
-
-      <HeightSpacer height={12} />
-      <ReusableText text="Notes (optional)" family="medium" size={SIZES.small} color={COLORS.secondary} />
-      <HeightSpacer height={6} />
-      <TextInput
-        style={[styles.input, styles.textarea]}
-        value={notes}
-        onChangeText={setNotes}
-        multiline
-        placeholder="Brand, condition, any extras..."
-        placeholderTextColor={COLORS.gray2}
-      />
-
-      <HeightSpacer height={12} />
-      <ReusableText text={`Photos (${photos.length}/4)`} family="medium" size={SIZES.small} color={COLORS.secondary} />
-      <HeightSpacer height={6} />
-      <View style={styles.photoRow}>
-        {localUris.map((uri, i) => (
-          <NetworkImage key={i} source={uri} width={70} height={70} radius={6} />
-        ))}
-        {photos.length < 4 && (
+      <View style={styles.conditionRow}>
+        {CONDITION_OPTIONS.map((opt) => (
           <TouchableOpacity
-            style={styles.addPhoto}
-            onPress={() => void pickPhoto()}
-            disabled={uploading}
+            key={opt}
+            style={[styles.conditionOption, condition === opt && styles.conditionActive]}
+            onPress={() => setCondition(opt)}
           >
-            {uploading ? (
-              <ActivityIndicator color={COLORS.primary} />
-            ) : (
-              <ReusableText text="+ Add" family="medium" size={SIZES.small} color={COLORS.primary} />
-            )}
+            <ReusableText
+              text={opt}
+              family={condition === opt ? "medium" : "regular"}
+              size={SIZES.small}
+              color={condition === opt ? COLORS.primary : COLORS.gray2}
+            />
           </TouchableOpacity>
-        )}
+        ))}
       </View>
+
+      {feePaid && (
+        <>
+          <HeightSpacer height={16} />
+          <ReusableText text="Proof Photo *" family="medium" size={SIZES.small} color={COLORS.secondary} />
+          <HeightSpacer height={4} />
+          <ReusableText
+            text="Take a live photo of the item to confirm you have it."
+            family="regular"
+            size={11}
+            color={COLORS.gray2}
+          />
+          <HeightSpacer height={8} />
+          <View style={styles.photoRow}>
+            {localUri && (
+              <NetworkImage source={localUri} width={90} height={90} radius={8} />
+            )}
+            <TouchableOpacity
+              style={[styles.cameraBtn, uploading && { opacity: 0.5 }]}
+              onPress={() => void takePhoto()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <ActivityIndicator color={COLORS.primary} />
+              ) : (
+                <>
+                  <Ionicons name="camera" size={22} color={COLORS.primary} />
+                  <ReusableText
+                    text={localUri ? "Retake" : "Camera"}
+                    family="medium"
+                    size={11}
+                    color={COLORS.primary}
+                  />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+          {location && (
+            <>
+              <HeightSpacer height={6} />
+              <View style={styles.locationRow}>
+                <Ionicons name="location" size={12} color={COLORS.gray2} />
+                <ReusableText
+                  text={`  ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
+                  family="regular"
+                  size={11}
+                  color={COLORS.gray2}
+                />
+              </View>
+            </>
+          )}
+        </>
+      )}
 
       <HeightSpacer height={16} />
       <ReusableBtn
         onPress={() => void submit()}
-        btnText={submitting ? "Submitting…" : "Submit Quote"}
+        btnText={submitting ? "Saving…" : (submitLabel ?? "Submit Quote")}
         backgroundColor={submitting ? COLORS.gray2 : COLORS.primary}
         textColor={COLORS.white}
         width="100%"
@@ -160,26 +207,29 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     fontFamily: "regular",
   },
-  textarea: { height: 80, textAlignVertical: "top" },
-  option: {
-    padding: 10,
+  conditionRow: { flexDirection: "row", gap: 10 },
+  conditionOption: {
+    flex: 1,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: COLORS.gray,
-    marginBottom: 6,
+    alignItems: "center",
     backgroundColor: COLORS.white,
   },
-  optionActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary1 },
-  photoRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  addPhoto: {
-    width: 70,
-    height: 70,
+  conditionActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary1 },
+  photoRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  cameraBtn: {
+    width: 90,
+    height: 90,
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
     backgroundColor: COLORS.primary1,
   },
+  locationRow: { flexDirection: "row", alignItems: "center" },
 });

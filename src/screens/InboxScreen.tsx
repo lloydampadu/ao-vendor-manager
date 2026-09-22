@@ -147,6 +147,6 @@ const styles = StyleSheet.create({
   },
   seg: { flex: 1, paddingVertical: 16, alignItems: "center" },
   segActive: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
-  list: { padding: 12, flexGrow: 1 },
+  list: { padding: 12, gap: 10, flexGrow: 1 },
   emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
 });
