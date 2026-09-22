@@ -24,7 +24,8 @@ type QuoteData  = { priceGhs: number; availability: string; notes?: string };
 export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
   const [rows, setRows] = useState<Assignment[]>([]);
   const [syncStatusMap, setSyncStatusMap] = useState<Record<string, QuoteSyncStatus>>({});
-  const { isSyncing, startSync } = useSyncStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const { startSync } = useSyncStore();
 
   const load = useCallback(async () => {
     const [all, statusMap] = await Promise.all([getAssignments(), getAllQuoteQueueStatusMap()]);
@@ -35,8 +36,13 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
   useEffect(() => { void load(); }, [load]);
 
   const onRefresh = useCallback(async () => {
-    await startSync();
-    await load();
+    setRefreshing(true);
+    try {
+      await startSync();
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [startSync, load]);
 
   return (
@@ -47,7 +53,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
       contentContainerStyle={styles.list}
       refreshControl={
         <RefreshControl
-          refreshing={isSyncing}
+          refreshing={refreshing}
           onRefresh={() => void onRefresh()}
           tintColor={COLORS.primary}
         />
