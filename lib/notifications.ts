@@ -25,10 +25,18 @@ export async function registerPushToken(): Promise<void> {
   if (finalStatus !== 'granted') return;
 
   if (Platform.OS === 'android') {
+    // Default channel (keep for backwards compat)
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+      name: 'General',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+    // New-request channel: triple vibration + custom chime
+    await Notifications.setNotificationChannelAsync('new-request', {
+      name: 'New Part Requests',
       importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
+      vibrationPattern: [0, 400, 150, 400, 150, 400],
+      sound: 'notification_request.wav',
+      enableVibrate: true,
     });
   }
 
