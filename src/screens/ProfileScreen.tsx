@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuthStore } from "../../store/auth-store";
 import { api } from "@/lib/api";
@@ -9,7 +9,7 @@ import { Card, ReusableBtn, ReusableText, HeightSpacer } from "../../components"
 import { COLORS, SIZES } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
-type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[] } };
+type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] } };
 
 export default function ProfileScreen(): React.JSX.Element {
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -17,7 +17,7 @@ export default function ProfileScreen(): React.JSX.Element {
 
   useEffect(() => {
     api.get<VendorMe>("/vendor-auth/me")
-      .then(({ vendor: v }) => setVendor(v))
+      .then(({ vendor: v }) => setVendor({ ...v, specialties: v.specialties ?? [], brands: v.brands ?? [] }))
       .catch(() => {});
   }, []);
 
@@ -55,7 +55,30 @@ export default function ProfileScreen(): React.JSX.Element {
               />
             </>
           )}
+          {vendor?.specialties && vendor.specialties.length > 0 && (
+            <>
+              <HeightSpacer height={10} />
+              <ReusableText text="Parts I sell" family="medium" size={SIZES.small} color={COLORS.secondary} />
+              <HeightSpacer height={6} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -2 }}>
+                {vendor.specialties.map((part) => (
+                  <View key={part} style={styles.chip}>
+                    <ReusableText text={part} family="regular" size={11} color={COLORS.primary} />
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
         </Card>
+
+        <HeightSpacer height={12} />
+
+        <TouchableOpacity
+          style={styles.editSpecialties}
+          onPress={() => rootNav.navigate("Onboarding")}
+        >
+          <ReusableText text="Edit what I sell" family="medium" size={SIZES.small} color={COLORS.primary} />
+        </TouchableOpacity>
 
         <HeightSpacer height={16} />
 
@@ -79,4 +102,22 @@ export default function ProfileScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.offwhite },
   container: { flex: 1, padding: 16 },
+  editSpecialties: {
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#EBF4FF",
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: "#EBF4FF",
+    marginRight: 6,
+    marginVertical: 2,
+  },
 });
