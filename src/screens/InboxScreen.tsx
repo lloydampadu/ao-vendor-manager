@@ -16,7 +16,9 @@ type Props = {
 const SEGMENTS = ["PENDING", "QUOTED", "DECLINED"] as const;
 type Segment = (typeof SEGMENTS)[number];
 
-// Persists across remounts so we never show the skeleton on a refresh or tab return
+type SegmentState = { loading: boolean; assignments: Assignment[] };
+
+// Persists across remounts so we never show the skeleton on a return visit
 const segmentLoaded: Partial<Record<Segment, boolean>> = {};
 
 type RequestData = {
@@ -30,64 +32,68 @@ type RequestData = {
 
 export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [segment, setSegment] = useState<Segment>("PENDING");
-  const [loading, setLoading] = useState(() => !segmentLoaded["PENDING"]);
+  const [segmentStates, setSegmentStates] = useState<Record<Segment, SegmentState>>(() => ({
+    PENDING:  { loading: !segmentLoaded["PENDING"],  assignments: [] },
+    QUOTED:   { loading: !segmentLoaded["QUOTED"],   assignments: [] },
+    DECLINED: { loading: !segmentLoaded["DECLINED"], assignments: [] },
+  }));
   const [refreshing, setRefreshing] = useState(false);
   const { startSync } = useSyncStore();
   const isFocused = useIsFocused();
-  // Track which segment's data is currently in state + last fingerprint per segment
-  const loadedSegmentRef = useRef<Segment | null>(null);
   const lastFpRef = useRef<Partial<Record<Segment, string>>>({});
-  // Prevent focus effect from racing the initial load on first mount
   const firstFocusRef = useRef(true);
+  // Always up-to-date segment for use inside stable callbacks
+  const segmentRef = useRef<Segment>("PENDING");
+  useEffect(() => { segmentRef.current = segment; }, [segment]);
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent && !segmentLoaded[segment]) {
-      setLoading(true);
+  const { loading, assignments } = segmentStates[segment];
+
+  // load() takes the target segment explicitly so it's stable (no segment dep)
+  const load = useCallback(async (seg: Segment, silent = false) => {
+    if (!silent && !segmentLoaded[seg]) {
+      setSegmentStates((prev) => ({ ...prev, [seg]: { ...prev[seg], loading: true } }));
     }
     await initDb();
-    const rows = await getAssignments(segment);
+    const rows = await getAssignments(seg);
     const fp = rows.map((a) => `${a.id}:${a.status}:${a.updated_at}`).join("|");
-    // Always update when the segment in state differs from what we just loaded,
-    // otherwise only update if the data actually changed (avoids flicker on bg reloads)
-    if (loadedSegmentRef.current !== segment || fp !== lastFpRef.current[segment]) {
-      lastFpRef.current[segment] = fp;
-      loadedSegmentRef.current = segment;
-      setAssignments(rows);
+    if (fp !== lastFpRef.current[seg]) {
+      lastFpRef.current[seg] = fp;
+      setSegmentStates((prev) => ({ ...prev, [seg]: { loading: false, assignments: rows } }));
+    } else {
+      setSegmentStates((prev) => ({ ...prev, [seg]: { ...prev[seg], loading: false } }));
     }
-    segmentLoaded[segment] = true;
-    setLoading(false);
-  }, [segment]);
+    segmentLoaded[seg] = true;
+  }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  // Load whenever the active segment changes
+  useEffect(() => { void load(segment); }, [segment, load]);
 
-  // Sync when nav screen gains focus (tab switch, back navigation).
-  // Skip on first mount — load() above already handles the initial fetch.
+  // Sync on focus — skip the very first mount (load() above handles it)
   useEffect(() => {
     if (!isFocused) return;
     if (firstFocusRef.current) {
       firstFocusRef.current = false;
       return;
     }
-    startSync().then(() => load(true)).catch(() => {});
-  }, [isFocused]);
+    startSync().then(() => load(segmentRef.current, true)).catch(() => {});
+  }, [isFocused, startSync, load]);
 
-  // Sync when app comes back to foreground (covers 2-phone same-account scenario)
+  // Sync when app returns to foreground
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active" && isFocused) {
-        startSync().then(() => load(true)).catch(() => {});
+        startSync().then(() => load(segmentRef.current, true)).catch(() => {});
       }
     });
     return () => sub.remove();
   }, [isFocused, startSync, load]);
 
-  // Poll every 30s while the screen is focused so two phones stay in sync
+  // Poll every 30s while focused
   useEffect(() => {
     if (!isFocused) return;
     const id = setInterval(() => {
-      startSync().then(() => load(true)).catch(() => {});
+      startSync().then(() => load(segmentRef.current, true)).catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
   }, [isFocused, startSync, load]);
@@ -100,7 +106,7 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
     setRefreshing(true);
     try {
       await startSync();
-      await load();
+      await load(segmentRef.current);
     } finally {
       setRefreshing(false);
     }
@@ -118,13 +124,7 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
           <TouchableOpacity
             key={s}
             style={[styles.seg, segment === s && [styles.segActive, { borderBottomColor: C.primary }]]}
-            onPress={() => {
-                setSegment(s);
-                if (!segmentLoaded[s]) {
-                  setLoading(true);
-                  setAssignments([]);
-                }
-              }}
+            onPress={() => setSegment(s)}
           >
             <ReusableText
               text={s}
