@@ -39,6 +39,17 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   // Track which segment's data is currently in state + last fingerprint per segment
   const loadedSegmentRef = useRef<Segment | null>(null);
   const lastFpRef = useRef<Partial<Record<Segment, string>>>({});
+  // Prevent focus effect from racing the initial load on first mount
+  const firstFocusRef = useRef(true);
+
+  // Synchronously show skeleton when switching to an unvisited segment,
+  // before the async load even starts, so stale data never flashes
+  useEffect(() => {
+    if (!segmentLoaded[segment]) {
+      setLoading(true);
+      setAssignments([]);
+    }
+  }, [segment]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent && !segmentLoaded[segment]) {
@@ -60,9 +71,14 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Sync when nav screen gains focus (tab switch, back navigation)
+  // Sync when nav screen gains focus (tab switch, back navigation).
+  // Skip on first mount — load() above already handles the initial fetch.
   useEffect(() => {
     if (!isFocused) return;
+    if (firstFocusRef.current) {
+      firstFocusRef.current = false;
+      return;
+    }
     startSync().then(() => load(true)).catch(() => {});
   }, [isFocused]);
 
