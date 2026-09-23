@@ -164,21 +164,7 @@ export function QuoteForm({
     try {
       const url = await uploadImage(uri);
       setPhotoUrl(url);
-      // Ask Haiku whether the photo actually shows the requested part.
-      if (partName && feePaid) {
-        setVerifying(true);
-        try {
-          const result = await api.post<{ match: boolean; reason: string }>(
-            `/vendor/requests/${assignmentId}/verify-photo`,
-            { imageUrl: url, partName },
-          );
-          setVerifyResult(result);
-        } catch {
-          setVerifyResult(null);
-        } finally {
-          setVerifying(false);
-        }
-      }
+      // Haiku photo verification — disabled for now
     } catch (e) {
       setLocalUri(null);
       Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
