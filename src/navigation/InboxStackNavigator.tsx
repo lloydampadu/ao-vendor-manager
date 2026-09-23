@@ -17,11 +17,7 @@ export default function InboxStackNavigator(): React.JSX.Element {
       <Stack.Screen
         name="RequestDetail"
         component={RequestDetailScreen}
-        options={{
-          title: 'Request Detail',
-          gestureEnabled: true,
-          gestureResponseDistance: 20, // only trigger back from within 20px of screen edge — slider starts at 26px so no conflict
-        }}
+        options={{ title: 'Request Detail', gestureEnabled: false }}
       />
     </Stack.Navigator>
   );

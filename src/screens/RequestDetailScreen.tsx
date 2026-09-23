@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Dimensions, PanResponder, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import ImageViewing from "react-native-image-viewing";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -185,16 +185,32 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
     ]);
   }
 
+  // Edge-only swipe-back: fires when touch starts within 25px of left edge.
+  // gestureEnabled is false on this screen so we own the gesture entirely.
+  const SCREEN_WIDTH = Dimensions.get("window").width;
+  const edgeBack = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (e) => e.nativeEvent.pageX <= 25,
+      onStartShouldSetPanResponderCapture: (e) => e.nativeEvent.pageX <= 25,
+      onMoveShouldSetPanResponder: (e, g) => e.nativeEvent.pageX <= 25 && g.dx > 5,
+      onPanResponderRelease: (_, g) => {
+        if (g.dx > SCREEN_WIDTH * 0.3 && g.vx > 0.2) navigation.goBack();
+      },
+    }),
+  ).current;
+
   if (!row) {
     return (
-      <ScrollView style={styles.scroll}>
-        <RequestDetailSkeleton />
-      </ScrollView>
+      <View style={{ flex: 1 }} {...edgeBack.panHandlers}>
+        <ScrollView style={styles.scroll}>
+          <RequestDetailSkeleton />
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <>
+    <View style={{ flex: 1 }} {...edgeBack.panHandlers}>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
       {/* Request info */}
@@ -378,7 +394,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       swipeToCloseEnabled
       doubleTapToZoomEnabled
     />
-    </>
+    </View>
   );
 }
 
