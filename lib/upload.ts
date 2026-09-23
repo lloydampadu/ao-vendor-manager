@@ -1,5 +1,5 @@
 import * as SecureStore from "expo-secure-store";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 const TIMEOUT_MS = 60_000;
