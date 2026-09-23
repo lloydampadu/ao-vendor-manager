@@ -39,12 +39,9 @@ type Props = {
 const TRACK_WIDTH = Dimensions.get("window").width - 24 * 2 - 32; // card padding
 const THUMB_SIZE = 48;
 const MAX_SLIDE = TRACK_WIDTH - THUMB_SIZE - 4;
-const CENTER = MAX_SLIDE / 2; // thumb starts in the middle — far from iOS swipe-back edge
-
 function SlideToConfirm({ onConfirmed }: { onConfirmed: () => void }) {
-  const x = useRef(new Animated.Value(CENTER)).current;
+  const x = useRef(new Animated.Value(0)).current;
   const confirmed = useRef(false);
-  const posRef = useRef(CENTER); // track current position for release check
 
   const pan = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -53,38 +50,30 @@ function SlideToConfirm({ onConfirmed }: { onConfirmed: () => void }) {
     onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
     onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_, g) => {
-      const next = Math.max(0, Math.min(CENTER + g.dx, MAX_SLIDE));
-      posRef.current = next;
-      x.setValue(next);
+      const clamped = Math.max(0, Math.min(g.dx, MAX_SLIDE));
+      x.setValue(clamped);
     },
-    onPanResponderRelease: () => {
+    onPanResponderRelease: (_, g) => {
       if (confirmed.current) return;
-      // Confirm if dragged far enough in either direction.
-      const ratio = Math.abs(posRef.current - CENTER) / CENTER;
+      const ratio = g.dx / MAX_SLIDE;
       if (ratio >= SLIDE_THRESHOLD) {
         confirmed.current = true;
-        const target = posRef.current > CENTER ? MAX_SLIDE : 0;
-        Animated.spring(x, { toValue: target, useNativeDriver: false }).start();
+        Animated.spring(x, { toValue: MAX_SLIDE, useNativeDriver: false }).start();
         onConfirmed();
       } else {
-        Animated.spring(x, { toValue: CENTER, useNativeDriver: false }).start();
+        Animated.spring(x, { toValue: 0, useNativeDriver: false }).start();
       }
     },
   });
 
-  // Opacity grows as thumb moves away from center in either direction.
-  const bgOpacity = x.interpolate({
-    inputRange: [0, CENTER, MAX_SLIDE],
-    outputRange: [1, 0, 1],
-    extrapolate: "clamp",
-  });
+  const bgOpacity = x.interpolate({ inputRange: [0, MAX_SLIDE], outputRange: [0, 1] });
 
   return (
     <View style={slide.track}>
       <Animated.View style={[StyleSheet.absoluteFill, slide.fill, { opacity: bgOpacity }]} />
-      <ReusableText text="← Slide to confirm you have this part →" family="regular" size={12} color={COLORS.gray2} />
+      <ReusableText text="Slide to confirm you have this part →" family="regular" size={12} color={COLORS.gray2} />
       <Animated.View style={[slide.thumb, { transform: [{ translateX: x }] }]} {...pan.panHandlers}>
-        <Ionicons name="swap-horizontal" size={20} color={COLORS.white} />
+        <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
       </Animated.View>
     </View>
   );
