@@ -14,7 +14,7 @@ export default function InboxStackNavigator(): React.JSX.Element {
   return (
     <Stack.Navigator>
       <Stack.Screen name="InboxList" component={InboxScreen} options={{ title: 'Inbox' }} />
-      <Stack.Screen name="RequestDetail" component={RequestDetailScreen} options={{ title: 'Request Detail' }} />
+      <Stack.Screen name="RequestDetail" component={RequestDetailScreen} options={{ title: 'Request Detail', gestureEnabled: false }} />
     </Stack.Navigator>
   );
 }
