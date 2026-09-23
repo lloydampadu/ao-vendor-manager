@@ -3,18 +3,16 @@ import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, AntDesign } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import InboxStackNavigator from './InboxStackNavigator';
-import QuotesScreen from '../screens/QuotesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ProductsStackNavigator from './ProductsStackNavigator';
-import { COLORS } from '../../constants/theme';
+import { useThemeColors } from '../../constants/theme';
 import type { InboxStackParamList } from './InboxStackNavigator';
 import type { ProductsStackParamList } from './ProductsStackNavigator';
 
 export type TabParamList = {
   Inbox: NavigatorScreenParams<InboxStackParamList> | undefined;
-  MyQuotes: undefined;
   Products: NavigatorScreenParams<ProductsStackParamList> | undefined;
   Profile: undefined;
 };
@@ -22,6 +20,7 @@ export type TabParamList = {
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator(): React.JSX.Element {
+  const C = useThemeColors();
   const insets = useSafeAreaInsets();
   const bottomPad = Platform.OS === 'android' ? Math.max(insets.bottom, 8) : 8;
 
@@ -29,17 +28,17 @@ export default function TabNavigator(): React.JSX.Element {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.black,
-        tabBarInactiveTintColor: COLORS.gray2,
+        tabBarActiveTintColor: C.secondary,
+        tabBarInactiveTintColor: C.gray2,
         tabBarLabelStyle: {
           fontFamily: 'medium',
           fontSize: 11,
           marginBottom: 2,
         },
         tabBarStyle: {
-          backgroundColor: COLORS.white,
+          backgroundColor: C.white,
           borderTopWidth: 1,
-          borderTopColor: COLORS.gray,
+          borderTopColor: C.gray,
           paddingTop: 8,
           paddingBottom: bottomPad,
           height: 56 + bottomPad,
@@ -57,22 +56,12 @@ export default function TabNavigator(): React.JSX.Element {
         }}
       />
       <Tab.Screen
-        name="MyQuotes"
-        component={QuotesScreen}
-        options={{
-          title: 'My Quotes',
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? 'document-text' : 'document-text-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="Products"
         component={ProductsStackNavigator}
         options={{
           title: 'Products',
           tabBarIcon: ({ focused, color }) => (
-            <AntDesign name={focused ? 'appstore1' : 'appstore-o'} size={24} color={color} />
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
           ),
         }}
       />

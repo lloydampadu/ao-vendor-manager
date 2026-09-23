@@ -30,7 +30,7 @@ import {
   SyncStatusIcon,
   RequestDetailSkeleton,
 } from "../../components";
-import { COLORS, SIZES } from "../../constants/theme";
+import { SIZES, useThemeColors } from "../../constants/theme";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
 
 type Props = {
@@ -85,6 +85,7 @@ function useCountdown(createdAt?: string): string | null {
 }
 
 export default function RequestDetailScreen({ navigation, route }: Props): React.JSX.Element {
+  const C = useThemeColors();
   const { assignmentId } = route.params;
   const [row, setRow] = useState<Assignment | null>(null);
   const [quoteSyncStatus, setQuoteSyncStatus] = useState<QuoteSyncStatus | null>(null);
@@ -206,7 +207,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
   if (!row) {
     return (
       <View style={{ flex: 1 }} {...edgeBack.panHandlers}>
-        <ScrollView style={styles.scroll}>
+        <ScrollView style={[styles.scroll, { backgroundColor: C.offwhite }]}>
           <RequestDetailSkeleton />
         </ScrollView>
       </View>
@@ -214,14 +215,14 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
   }
 
   return (
-    <View style={{ flex: 1 }} {...edgeBack.panHandlers}>
+    <View style={{ flex: 1, backgroundColor: C.offwhite }} {...edgeBack.panHandlers}>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
       {/* Request info */}
       <Card>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <ReusableText text={req.partName} family="bold" size={18} color={COLORS.secondary} />
+            <ReusableText text={req.partName} family="bold" size={18} color={C.secondary} />
           </View>
           <WidthSpacer width={8} />
           <StatusBadge status={row.status} />
@@ -230,19 +231,19 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
         {car.length > 0 && (
           <>
             <HeightSpacer height={6} />
-            <ReusableText text={`Vehicle: ${car}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+            <ReusableText text={`Vehicle: ${car}`} family="regular" size={SIZES.medium} color={C.gray2} />
           </>
         )}
         {req.engine && (
           <>
             <HeightSpacer height={4} />
-            <ReusableText text={`Engine: ${req.engine}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+            <ReusableText text={`Engine: ${req.engine}`} family="regular" size={SIZES.medium} color={C.gray2} />
           </>
         )}
         {req.notes && (
           <>
             <HeightSpacer height={8} />
-            <ReusableText text={req.notes} family="regular" size={SIZES.medium} color={COLORS.secondary} />
+            <ReusableText text={req.notes} family="regular" size={SIZES.medium} color={C.secondary} />
           </>
         )}
         {req.photos && req.photos.length > 0 && (
@@ -268,9 +269,9 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <>
             <HeightSpacer height={10} />
             <View style={styles.countdownRow}>
-              <Ionicons name="time-outline" size={14} color={COLORS.gray2} />
+              <Ionicons name="time-outline" size={14} color={C.gray2} />
               <WidthSpacer width={4} />
-              <ReusableText text={countdown} family="regular" size={SIZES.small} color={COLORS.gray2} />
+              <ReusableText text={countdown} family="regular" size={SIZES.small} color={C.gray2} />
             </View>
           </>
         )}
@@ -291,7 +292,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           </Card>
           {quote && (
             <Card>
-              <ReusableText text="Your winning price" family="bold" size={15} color={COLORS.secondary} />
+              <ReusableText text="Your winning price" family="bold" size={15} color={C.secondary} />
               <HeightSpacer height={8} />
               {quote.prices && quote.prices.length > 0 ? (
                 quote.prices.map((p) => (
@@ -302,9 +303,9 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
                 ))
               ) : (
                 <>
-                  <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={22} color={COLORS.primary} />
+                  <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={22} color={C.primary} />
                   <HeightSpacer height={4} />
-                  <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+                  <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={C.gray2} />
                 </>
               )}
             </Card>
@@ -315,7 +316,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {/* PENDING: quote form */}
       {row.status === "PENDING" && (
         <Card>
-          <ReusableText text="Send Your Price" family="bold" size={16} color={COLORS.secondary} />
+          <ReusableText text="Send Your Price" family="bold" size={16} color={C.secondary} />
           <HeightSpacer height={12} />
           <QuoteForm assignmentId={row.id} feePaid={true} partName={req.partName} onSubmit={(payload) => submitQuote(payload)} />
           <HeightSpacer height={8} />
@@ -323,7 +324,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             onPress={decline}
             btnText="I don't have this part"
             backgroundColor="transparent"
-            textColor={COLORS.primary}
+            textColor={C.primary}
             width="100%"
             height={44}
             borderRadius={8}
@@ -336,35 +337,35 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {row.status === "QUOTED" && quote !== null && !editingQuote && (
         <Card>
           <View style={styles.row}>
-            <ReusableText text="Your quote" family="bold" size={16} color={COLORS.secondary} />
+            <ReusableText text="Your quote" family="bold" size={16} color={C.secondary} />
             {quoteSyncStatus != null && <SyncStatusIcon status={quoteSyncStatus} />}
           </View>
           <HeightSpacer height={8} />
           {quote.prices && quote.prices.length > 0 ? (
             quote.prices.map((p) => (
               <View key={p.condition} style={styles.quotePriceRow}>
-                <ReusableText text={p.condition} family="regular" size={SIZES.small} color={COLORS.gray2} />
-                <ReusableText text={`GHS ${p.priceGhs}`} family="bold" size={18} color={COLORS.primary} />
+                <ReusableText text={p.condition} family="regular" size={SIZES.small} color={C.gray2} />
+                <ReusableText text={`GHS ${p.priceGhs}`} family="bold" size={18} color={C.primary} />
               </View>
             ))
           ) : (
             <>
-              <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={COLORS.primary} />
+              <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={C.primary} />
               <HeightSpacer height={4} />
-              <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+              <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={C.gray2} />
             </>
           )}
           <HeightSpacer height={12} />
           <ReusableBtn
             onPress={() => setEditingQuote(true)}
             btnText="Change Quote"
-            backgroundColor={COLORS.white}
-            textColor={COLORS.primary}
+            backgroundColor={C.white}
+            textColor={C.primary}
             width="100%"
             height={44}
             borderRadius={8}
             borderWidth={1.5}
-            borderColor={COLORS.primary}
+            borderColor={C.primary}
             fontSize={SIZES.small}
           />
         </Card>
@@ -374,12 +375,12 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {row.status === "QUOTED" && editingQuote && (
         <Card>
           <View style={styles.row}>
-            <ReusableText text="Change Your Quote" family="bold" size={16} color={COLORS.secondary} />
+            <ReusableText text="Change Your Quote" family="bold" size={16} color={C.secondary} />
             <ReusableBtn
               onPress={() => setEditingQuote(false)}
               btnText="Cancel"
               backgroundColor="transparent"
-              textColor={COLORS.gray2}
+              textColor={C.gray2}
               width={60}
               height={32}
               borderRadius={8}
@@ -400,12 +401,12 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
 
       {/* EXPIRED / DECLINED */}
       {(row.status === "EXPIRED" || row.status === "DECLINED") && (
-        <Card style={styles.closedCard}>
+        <Card style={{ backgroundColor: C.offwhite }}>
           <ReusableText
             text={row.status === "EXPIRED" ? "This request is closed." : "You said you don't have this part."}
             family="regular"
             size={SIZES.medium}
-            color={COLORS.gray2}
+            color={C.gray2}
           />
         </Card>
       )}
@@ -425,11 +426,10 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: COLORS.offwhite },
+  scroll: { flex: 1 },
   content: { padding: 12, gap: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   countdownRow: { flexDirection: "row", alignItems: "center" },
   quotePriceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 },
   wonCard: { backgroundColor: "#D4EDDA", borderColor: "#c3e6cb", borderWidth: 1 },
-  closedCard: { backgroundColor: COLORS.offwhite },
 });

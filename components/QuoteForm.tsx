@@ -9,7 +9,7 @@ import ReusableText from "./Reusable/ReusableText";
 import ReusableBtn from "./Reusable/ReusableBtn";
 import NetworkImage from "./Reusable/NetworkImage";
 import HeightSpacer from "./Reusable/HeightSpacer";
-import { COLORS, SIZES } from "../constants/theme";
+import { COLORS, SIZES, useThemeColors } from "../constants/theme";
 import { uploadImage } from "../lib/upload";
 import { api } from "../lib/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,6 +45,7 @@ export function QuoteForm({
   initialValues,
   submitLabel,
 }: Props): React.JSX.Element {
+  const C = useThemeColors();
   // Per-condition prices: { "Brand New": "250", "Home Used": "" }
   const initPrices = (): Record<Condition, string> => {
     if (initialValues?.prices && initialValues.prices.length > 0) {
@@ -166,26 +167,26 @@ export function QuoteForm({
     }
   }
 
-  const timerColor = secondsLeft <= 15 ? "#dc2626" : secondsLeft <= 30 ? "#d97706" : COLORS.primary;
+  const timerColor = secondsLeft <= 15 ? "#dc2626" : secondsLeft <= 30 ? "#d97706" : C.primary;
 
   return (
     <View>
-      <ReusableText text="Your price (GHS)" family="medium" size={SIZES.small} color={COLORS.secondary} />
+      <ReusableText text="Your price (GHS)" family="medium" size={SIZES.small} color={C.secondary} />
       <HeightSpacer height={4} />
-      <ReusableText text="Enter a price for each type you have. Leave blank if you don't have it." family="regular" size={11} color={COLORS.gray2} />
+      <ReusableText text="Enter a price for each type you have. Leave blank if you don't have it." family="regular" size={11} color={C.gray2} />
       <HeightSpacer height={10} />
       {CONDITION_OPTIONS.map((opt) => (
         <View key={opt} style={styles.conditionPriceRow}>
           <View style={styles.conditionLabel}>
-            <ReusableText text={opt} family="medium" size={SIZES.small} color={COLORS.secondary} />
+            <ReusableText text={opt} family="medium" size={SIZES.small} color={C.secondary} />
           </View>
           <TextInput
-            style={[styles.input, styles.conditionPriceInput, !prices[opt] && styles.inputEmpty]}
+            style={[styles.input, styles.conditionPriceInput, { borderColor: C.gray, color: C.secondary, backgroundColor: C.white }]}
             value={prices[opt]}
             onChangeText={(v) => setPrices((prev) => ({ ...prev, [opt]: v }))}
             keyboardType="number-pad"
             placeholder="Leave empty if you don't have it"
-            placeholderTextColor={COLORS.gray2}
+            placeholderTextColor={C.gray2}
           />
         </View>
       ))}
@@ -205,22 +206,21 @@ export function QuoteForm({
                     <>
                       <HeightSpacer height={4} />
                       <View style={styles.locationRow}>
-                        <Ionicons name="location" size={11} color={COLORS.gray2} />
+                        <Ionicons name="location" size={11} color={C.gray2} />
                         <ReusableText
                           text={`  ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
                           family="regular"
                           size={11}
-                          color={COLORS.gray2}
+                          color={C.gray2}
                         />
                       </View>
                     </>
                   )}
-                  {/* AI verification result */}
                   {(verifying || verifyResult) && <HeightSpacer height={8} />}
                   {verifying && (
                     <View style={styles.verifyRow}>
-                      <ActivityIndicator size="small" color={COLORS.gray2} />
-                      <ReusableText text="  Checking photo…" family="regular" size={11} color={COLORS.gray2} />
+                      <ActivityIndicator size="small" color={C.gray2} />
+                      <ReusableText text="  Checking photo…" family="regular" size={11} color={C.gray2} />
                     </View>
                   )}
                   {!verifying && verifyResult && (
@@ -240,15 +240,15 @@ export function QuoteForm({
                   )}
                   <HeightSpacer height={8} />
                   <TouchableOpacity onPress={resetPhoto}>
-                    <ReusableText text="Take again" family="regular" size={11} color={COLORS.primary} />
+                    <ReusableText text="Take again" family="regular" size={11} color={C.primary} />
                   </TouchableOpacity>
                 </View>
-                {uploading && <ActivityIndicator color={COLORS.primary} />}
+                {uploading && <ActivityIndicator color={C.primary} />}
               </View>
             </View>
           ) : confirmed ? (
             /* Confirmed, camera open / counting down */
-            <View style={styles.countdownBox}>
+            <View style={[styles.countdownBox, { borderColor: C.primary, backgroundColor: C.primary1 }]}>
               <ReusableText text="Take the photo now!" family="bold" size={15} color={timerColor} />
               <HeightSpacer height={6} />
               <ReusableText
@@ -258,31 +258,30 @@ export function QuoteForm({
                 color={timerColor}
               />
               <HeightSpacer height={10} />
-              <TouchableOpacity style={styles.cameraBtn} onPress={() => void openCamera()} disabled={uploading}>
+              <TouchableOpacity style={[styles.cameraBtn, { borderColor: C.primary, backgroundColor: C.white }]} onPress={() => void openCamera()} disabled={uploading}>
                 {uploading
-                  ? <ActivityIndicator color={COLORS.primary} />
-                  : <><Ionicons name="camera" size={22} color={COLORS.primary} /><ReusableText text="Open Camera" family="medium" size={12} color={COLORS.primary} /></>
+                  ? <ActivityIndicator color={C.primary} />
+                  : <><Ionicons name="camera" size={22} color={C.primary} /><ReusableText text="Open Camera" family="medium" size={12} color={C.primary} /></>
                 }
               </TouchableOpacity>
             </View>
           ) : (
-            /* Not yet confirmed */
             <View>
-              <ReusableText text="Do you have this part?" family="medium" size={SIZES.small} color={COLORS.secondary} />
+              <ReusableText text="Do you have this part?" family="medium" size={SIZES.small} color={C.secondary} />
               <HeightSpacer height={4} />
               <ReusableText
                 text="Tap the button below to confirm. You will have 90 seconds to take a photo."
                 family="regular"
                 size={11}
-                color={COLORS.gray2}
+                color={C.gray2}
               />
               <HeightSpacer height={12} />
               <TouchableOpacity
-                style={styles.confirmBtn}
+                style={[styles.confirmBtn, { backgroundColor: C.primary }]}
                 onPress={() => { setExpired(false); setConfirmed(true); }}
               >
-                <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.white} />
-                <ReusableText text="  Yes, I have this part" family="medium" size={SIZES.small} color={COLORS.white} />
+                <Ionicons name="checkmark-circle-outline" size={20} color={C.white} />
+                <ReusableText text="  Yes, I have this part" family="medium" size={SIZES.small} color={C.white} />
               </TouchableOpacity>
             </View>
           )}
@@ -293,8 +292,8 @@ export function QuoteForm({
       <ReusableBtn
         onPress={() => void submit()}
         btnText={submitting ? "Sending…" : (submitLabel ?? "Send Quote")}
-        backgroundColor={submitting ? COLORS.gray2 : COLORS.primary}
-        textColor={COLORS.white}
+        backgroundColor={submitting ? C.gray2 : C.primary}
+        textColor={C.white}
         width="100%"
         height={52}
         borderRadius={10}
@@ -307,19 +306,15 @@ export function QuoteForm({
 const styles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
-    borderColor: COLORS.gray,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: SIZES.medium,
-    color: COLORS.secondary,
-    backgroundColor: COLORS.white,
     fontFamily: "regular",
   },
   conditionPriceRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   conditionLabel: { width: 90 },
   conditionPriceInput: { flex: 1, marginBottom: 0 },
-  inputEmpty: { borderColor: COLORS.gray },
   proofRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   locationRow: { flexDirection: "row", alignItems: "center" },
   verifyRow: { flexDirection: "row", alignItems: "flex-start" },
@@ -328,8 +323,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary1,
   },
   cameraBtn: {
     flexDirection: "row",
@@ -339,8 +332,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.white,
   },
   confirmBtn: {
     flexDirection: "row",
@@ -348,6 +339,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 14,
     borderRadius: 10,
-    backgroundColor: COLORS.primary,
   },
 });

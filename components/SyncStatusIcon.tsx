@@ -2,18 +2,18 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import ReusableText from "./Reusable/ReusableText";
-import { COLORS } from "../constants/theme";
+import { useThemeColors } from "../constants/theme";
 import type { QuoteSyncStatus } from "../lib/db";
 
 type Props = { status: QuoteSyncStatus };
 
-const CONFIG = {
-  pending: { icon: "time-outline" as const,       color: COLORS.gray2,   label: "Sending…"     },
-  synced:  { icon: "checkmark-done" as const,     color: "#22c55e",      label: "Sent"         },
-  error:   { icon: "alert-circle-outline" as const, color: "#ef4444",    label: "Failed to send" },
-};
-
 export function SyncStatusIcon({ status }: Props) {
+  const C = useThemeColors();
+  const CONFIG = {
+    pending: { icon: "time-outline" as const,         color: C.gray2,    label: "Sending…"     },
+    synced:  { icon: "checkmark-done" as const,       color: "#22c55e",  label: "Sent"         },
+    error:   { icon: "alert-circle-outline" as const, color: "#ef4444",  label: "Failed to send" },
+  };
   const { icon, color, label } = CONFIG[status];
   return (
     <View style={styles.row}>

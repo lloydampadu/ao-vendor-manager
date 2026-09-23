@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { PART_CATEGORIES, CATEGORY_ICONS } from "@/lib/parts-catalog";
 import { ReusableText, HeightSpacer } from "../../components";
-import { COLORS, SIZES, SHADOWS } from "../../constants/theme";
+import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Onboarding">;
@@ -24,6 +24,7 @@ const CATEGORIES = Object.keys(PART_CATEGORIES);
 type SectionData = { category: string; item: string };
 
 export default function OnboardingScreen({ navigation }: Props): React.JSX.Element {
+  const C = useThemeColors();
   const insets = useSafeAreaInsets();
   const { vendor, setVendor } = useAuthStore();
 
@@ -110,33 +111,31 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
   const totalSelected = selected.size;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <ReusableText text="What do you sell?" family="bold" size={22} color={COLORS.secondary} />
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.offwhite }]}>
+      <View style={[styles.header, { backgroundColor: C.white, borderBottomColor: C.gray }]}>
+        <ReusableText text="What do you sell?" family="bold" size={22} color={C.secondary} />
         <HeightSpacer height={4} />
         <ReusableText
           text="Pick all the parts you sell. Only pick what you actually have."
           family="regular"
           size={13}
-          color={COLORS.gray2}
+          color={C.gray2}
         />
         <HeightSpacer height={12} />
-        <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={16} color={COLORS.gray2} style={{ marginRight: 8 }} />
+        <View style={[styles.searchRow, { backgroundColor: C.offwhite, borderColor: C.gray }]}>
+          <Ionicons name="search-outline" size={16} color={C.gray2} style={{ marginRight: 8 }} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: C.secondary }]}
             value={search}
             onChangeText={setSearch}
             placeholder="Search parts…"
-            placeholderTextColor={COLORS.gray2}
+            placeholderTextColor={C.gray2}
             returnKeyType="search"
             clearButtonMode="while-editing"
           />
         </View>
       </View>
 
-      {/* Section list */}
       <SectionList
         sections={visibleSections}
         keyExtractor={(item) => item.item}
@@ -151,32 +150,22 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
 
           return (
             <TouchableOpacity
-              style={styles.sectionHeader}
+              style={[styles.sectionHeader, { backgroundColor: C.white, borderColor: C.gray }]}
               onPress={() => toggleSection(section.title)}
               activeOpacity={0.7}
             >
               <View style={styles.sectionLeft}>
-                <View style={[styles.catIcon, count > 0 && styles.catIconActive]}>
+                <View style={[styles.catIcon, { backgroundColor: count > 0 ? C.primary : C.gray }]}>
                   <Ionicons
                     name={icon as any}
                     size={18}
-                    color={count > 0 ? COLORS.white : COLORS.gray2}
+                    color={C.white}
                   />
                 </View>
                 <View style={{ marginLeft: 12 }}>
-                  <ReusableText
-                    text={section.title}
-                    family="bold"
-                    size={15}
-                    color={COLORS.secondary}
-                  />
+                  <ReusableText text={section.title} family="bold" size={15} color={C.secondary} />
                   {count > 0 && (
-                    <ReusableText
-                      text={`${count} selected`}
-                      family="regular"
-                      size={12}
-                      color={COLORS.primary}
-                    />
+                    <ReusableText text={`${count} selected`} family="regular" size={12} color={C.primary} />
                   )}
                 </View>
               </View>
@@ -187,14 +176,10 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
                     style={styles.clearBtn}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <ReusableText text="Clear" family="regular" size={12} color={COLORS.red} />
+                    <ReusableText text="Clear" family="regular" size={12} color={C.red} />
                   </TouchableOpacity>
                 )}
-                <Ionicons
-                  name={isOpen ? "chevron-up" : "chevron-down"}
-                  size={18}
-                  color={COLORS.gray2}
-                />
+                <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={18} color={C.gray2} />
               </View>
             </TouchableOpacity>
           );
@@ -203,18 +188,18 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
           const checked = selected.has(item.item);
           return (
             <TouchableOpacity
-              style={styles.item}
+              style={[styles.item, { backgroundColor: C.white, borderBottomColor: C.offwhite }]}
               onPress={() => toggleItem(item.item)}
               activeOpacity={0.6}
             >
-              <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                {checked && <Ionicons name="checkmark" size={13} color={COLORS.white} />}
+              <View style={[styles.checkbox, checked && { backgroundColor: C.primary, borderColor: C.primary }]}>
+                {checked && <Ionicons name="checkmark" size={13} color={C.white} />}
               </View>
               <ReusableText
                 text={item.item}
                 family={checked ? "medium" : "regular"}
                 size={14}
-                color={checked ? COLORS.secondary : COLORS.gray2}
+                color={checked ? C.secondary : C.gray2}
               />
             </TouchableOpacity>
           );
@@ -227,29 +212,28 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
           );
           return (
             <TouchableOpacity
-              style={styles.selectAllRow}
+              style={[styles.selectAllRow, { backgroundColor: C.white, borderBottomColor: C.gray }]}
               onPress={() => toggleAll(section.title)}
             >
               <ReusableText
                 text={allSelected ? "Deselect all" : "Select all in this category"}
                 family="regular"
                 size={12}
-                color={COLORS.primary}
+                color={C.primary}
               />
             </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <ReusableText text="No parts match your search" family="regular" size={14} color={COLORS.gray2} />
+            <ReusableText text="No parts match your search" family="regular" size={14} color={C.gray2} />
           </View>
         }
       />
 
-      {/* Save button */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: C.white, borderTopColor: C.gray }]}>
         <TouchableOpacity
-          style={[styles.saveBtn, (saving || totalSelected === 0) && styles.saveBtnDisabled]}
+          style={[styles.saveBtn, { backgroundColor: C.primary }, (saving || totalSelected === 0) && styles.saveBtnDisabled]}
           onPress={() => void save()}
           disabled={saving || totalSelected === 0}
           activeOpacity={0.85}
@@ -258,7 +242,7 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
             text={saving ? "Saving…" : totalSelected === 0 ? "Select parts to continue" : `Save ${totalSelected} part${totalSelected === 1 ? "" : "s"}`}
             family="bold"
             size={16}
-            color={COLORS.white}
+            color={C.white}
           />
         </TouchableOpacity>
       </View>
@@ -267,29 +251,24 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.offwhite },
+  root: { flex: 1 },
   header: {
-    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.offwhite,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: COLORS.secondary,
+    fontSize: SIZES.small,
     fontFamily: "regular",
     padding: 0,
   },
@@ -298,13 +277,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginTop: 8,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: "#e5e7eb",
   },
   sectionLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
   sectionRight: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -312,19 +289,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#f3f4f8",
     alignItems: "center",
     justifyContent: "center",
   },
-  catIconActive: { backgroundColor: COLORS.primary },
   item: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.white,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f8",
     gap: 12,
   },
   checkbox: {
@@ -336,30 +309,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxChecked: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
   selectAllRow: {
-    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
     alignItems: "flex-end",
   },
   clearBtn: { paddingHorizontal: 4 },
   empty: { padding: 40, alignItems: "center" },
   footer: {
-    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
     ...SHADOWS.small,
   },
   saveBtn: {
-    backgroundColor: COLORS.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",

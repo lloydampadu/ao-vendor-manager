@@ -6,12 +6,13 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuthStore } from "../../store/auth-store";
 import { api } from "@/lib/api";
 import { Card, ReusableBtn, ReusableText, HeightSpacer } from "../../components";
-import { COLORS, SIZES } from "../../constants/theme";
+import { SIZES, useThemeColors } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] } };
 
 export default function ProfileScreen(): React.JSX.Element {
+  const C = useThemeColors();
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { vendor, setVendor, clearAuth } = useAuthStore();
 
@@ -38,12 +39,12 @@ export default function ProfileScreen(): React.JSX.Element {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: C.offwhite }]}>
       <View style={styles.container}>
         <Card>
-          <ReusableText text={vendor?.name ?? "Vendor"} family="bold" size={18} color={COLORS.secondary} />
+          <ReusableText text={vendor?.name ?? "Vendor"} family="bold" size={18} color={C.secondary} />
           <HeightSpacer height={4} />
-          <ReusableText text={vendor?.phone ?? ""} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+          <ReusableText text={vendor?.phone ?? ""} family="regular" size={SIZES.medium} color={C.gray2} />
           {vendor?.categories && vendor.categories.length > 0 && (
             <>
               <HeightSpacer height={4} />
@@ -51,19 +52,19 @@ export default function ProfileScreen(): React.JSX.Element {
                 text={vendor.categories.join(", ")}
                 family="regular"
                 size={SIZES.small}
-                color={COLORS.gray2}
+                color={C.gray2}
               />
             </>
           )}
           {vendor?.specialties && vendor.specialties.length > 0 && (
             <>
               <HeightSpacer height={10} />
-              <ReusableText text="Parts I sell" family="medium" size={SIZES.small} color={COLORS.secondary} />
+              <ReusableText text="Parts I sell" family="medium" size={SIZES.small} color={C.secondary} />
               <HeightSpacer height={6} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -2 }}>
                 {vendor.specialties.map((part) => (
-                  <View key={part} style={styles.chip}>
-                    <ReusableText text={part} family="regular" size={11} color={COLORS.primary} />
+                  <View key={part} style={[styles.chip, { borderColor: C.primary, backgroundColor: C.primary1 }]}>
+                    <ReusableText text={part} family="regular" size={11} color={C.primary} />
                   </View>
                 ))}
               </ScrollView>
@@ -74,10 +75,10 @@ export default function ProfileScreen(): React.JSX.Element {
         <HeightSpacer height={12} />
 
         <TouchableOpacity
-          style={styles.editSpecialties}
+          style={[styles.editSpecialties, { borderColor: C.primary, backgroundColor: C.primary1 }]}
           onPress={() => rootNav.navigate("Onboarding")}
         >
-          <ReusableText text="Change what I sell" family="medium" size={SIZES.small} color={COLORS.primary} />
+          <ReusableText text="Change what I sell" family="medium" size={SIZES.small} color={C.primary} />
         </TouchableOpacity>
 
         <HeightSpacer height={16} />
@@ -85,13 +86,13 @@ export default function ProfileScreen(): React.JSX.Element {
         <ReusableBtn
           onPress={logout}
           btnText="Log out"
-          backgroundColor={COLORS.white}
-          textColor={COLORS.primary}
+          backgroundColor={C.white}
+          textColor={C.primary}
           width="100%"
           height={52}
           borderRadius={10}
           borderWidth={1.5}
-          borderColor={COLORS.primary}
+          borderColor={C.primary}
           fontSize={SIZES.medium}
         />
       </View>
@@ -100,23 +101,19 @@ export default function ProfileScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.offwhite },
+  safe: { flex: 1 },
   container: { flex: 1, padding: 16 },
   editSpecialties: {
     borderWidth: 1,
-    borderColor: COLORS.primary,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#EBF4FF",
   },
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.primary,
-    backgroundColor: "#EBF4FF",
     marginRight: 6,
     marginVertical: 2,
   },

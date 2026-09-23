@@ -12,7 +12,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { ReusableText, HeightSpacer } from "../../components";
-import { COLORS, SHADOWS } from "../../constants/theme";
+import { SHADOWS, useThemeColors } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OnboardingBrands">;
@@ -29,6 +29,7 @@ const MAKES = [
 ];
 
 export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX.Element {
+  const C = useThemeColors();
   const insets = useSafeAreaInsets();
   const { vendor, setVendor } = useAuthStore();
 
@@ -49,7 +50,7 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
   function toggleMake(make: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.delete(ALL); // selecting specific make removes "All brands"
+      next.delete(ALL);
       next.has(make) ? next.delete(make) : next.add(make);
       return next;
     });
@@ -79,16 +80,15 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
   const selectedCount = allBrands ? MAKES.length : selected.size;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <ReusableText text="Which car brands do you work with?" family="bold" size={22} color={COLORS.secondary} />
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.offwhite }]}>
+      <View style={[styles.header, { backgroundColor: C.white, borderBottomColor: C.gray }]}>
+        <ReusableText text="Which car brands do you work with?" family="bold" size={22} color={C.secondary} />
         <HeightSpacer height={4} />
         <ReusableText
           text="You will only get requests for the brands you pick."
           family="regular"
           size={13}
-          color={COLORS.gray2}
+          color={C.gray2}
         />
       </View>
 
@@ -100,35 +100,34 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
         columnWrapperStyle={{ gap: 10 }}
         ListHeaderComponent={
           <>
-            {/* All brands card */}
             <TouchableOpacity
-              style={[styles.allCard, allBrands && styles.allCardActive]}
+              style={[styles.allCard, { backgroundColor: C.white, borderColor: allBrands ? C.primary : C.gray }, allBrands && { backgroundColor: C.primary1 }]}
               onPress={toggleAll}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, allBrands && styles.checkboxChecked]}>
-                {allBrands && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+              <View style={[styles.checkbox, allBrands && { backgroundColor: C.primary, borderColor: C.primary }]}>
+                {allBrands && <Ionicons name="checkmark" size={14} color={C.white} />}
               </View>
               <View style={{ flex: 1 }}>
                 <ReusableText
                   text="All brands"
                   family="bold"
                   size={15}
-                  color={allBrands ? COLORS.primary : COLORS.secondary}
+                  color={allBrands ? C.primary : C.secondary}
                 />
                 <ReusableText
                   text="Receive requests for any car brand"
                   family="regular"
                   size={12}
-                  color={COLORS.gray2}
+                  color={C.gray2}
                 />
               </View>
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <ReusableText text="or choose specific brands" family="regular" size={12} color={COLORS.gray2} />
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: C.gray }]} />
+              <ReusableText text="or choose specific brands" family="regular" size={12} color={C.gray2} />
+              <View style={[styles.divider, { backgroundColor: C.gray }]} />
             </View>
           </>
         }
@@ -136,18 +135,18 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
           const checked = !allBrands && selected.has(item);
           return (
             <TouchableOpacity
-              style={[styles.makeCard, checked && styles.makeCardActive]}
+              style={[styles.makeCard, { backgroundColor: C.white, borderColor: checked ? C.primary : C.gray }, checked && { backgroundColor: C.primary1 }]}
               onPress={() => toggleMake(item)}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                {checked && <Ionicons name="checkmark" size={13} color={COLORS.white} />}
+              <View style={[styles.checkbox, checked && { backgroundColor: C.primary, borderColor: C.primary }]}>
+                {checked && <Ionicons name="checkmark" size={13} color={C.white} />}
               </View>
               <ReusableText
                 text={item}
                 family={checked ? "medium" : "regular"}
                 size={13}
-                color={checked ? COLORS.secondary : COLORS.gray2}
+                color={checked ? C.secondary : C.gray2}
                 numberOfLines={1}
               />
             </TouchableOpacity>
@@ -155,10 +154,9 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
         }}
       />
 
-      {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: C.white, borderTopColor: C.gray }]}>
         <TouchableOpacity
-          style={[styles.saveBtn, (saving || selected.size === 0) && styles.saveBtnDisabled]}
+          style={[styles.saveBtn, { backgroundColor: C.primary }, (saving || selected.size === 0) && styles.saveBtnDisabled]}
           onPress={() => void save()}
           disabled={saving || selected.size === 0}
           activeOpacity={0.85}
@@ -175,7 +173,7 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
             }
             family="bold"
             size={16}
-            color={COLORS.white}
+            color={C.white}
           />
         </TouchableOpacity>
       </View>
@@ -184,31 +182,23 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.offwhite },
+  root: { flex: 1 },
   header: {
-    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   list: { padding: 16, paddingBottom: 8 },
   allCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.white,
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1.5,
-    borderColor: "#e5e7eb",
     ...SHADOWS.small,
-  },
-  allCardActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: "#EBF4FF",
   },
   dividerRow: {
     flexDirection: "row",
@@ -216,22 +206,16 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 14,
   },
-  divider: { flex: 1, height: 1, backgroundColor: "#e5e7eb" },
+  divider: { flex: 1, height: 1 },
   makeCard: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: COLORS.white,
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-  },
-  makeCardActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: "#EBF4FF",
   },
   checkbox: {
     width: 22,
@@ -243,20 +227,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  checkboxChecked: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
   footer: {
-    backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
     ...SHADOWS.small,
   },
   saveBtn: {
-    backgroundColor: COLORS.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",

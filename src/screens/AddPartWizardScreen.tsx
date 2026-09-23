@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { uploadImage } from "@/lib/upload";
 import { ReusableText } from "../../components";
-import { COLORS } from "../../constants/theme";
+import { useThemeColors } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
 type Props = {
@@ -39,18 +39,12 @@ const CATEGORIES: Category[] = [
   { label: "General",     icon: "grid-outline",          value: "GENERAL" },
 ];
 
-const BG = COLORS.offwhite;
-const CARD = COLORS.white;
-const BLUE = COLORS.primary;
-const BORDER = "#e5e7eb";
-const TEXT = COLORS.secondary;
-const SUBTEXT = COLORS.gray2;
-
 type Step = "category" | "name" | "price" | "quantity" | "photo" | "condition" | "success";
 
 const STEPS: Step[] = ["category", "name", "price", "quantity", "photo", "condition", "success"];
 
 export default function AddPartWizardScreen({ navigation }: Props): React.JSX.Element {
+  const C = useThemeColors();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>("category");
@@ -65,7 +59,6 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
   const [saving, setSaving] = useState(false);
 
   const stepIndex = STEPS.indexOf(step);
-  const totalVisible = STEPS.length - 1; // exclude success from progress
 
   function next() {
     const idx = STEPS.indexOf(step);
@@ -147,41 +140,35 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 16 }]}>
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 16, backgroundColor: C.offwhite }]}>
 
-      {/* Progress dots */}
       {step !== "success" && (
         <View style={styles.progressRow}>
           {STEPS.filter((s) => s !== "success").map((s, i) => (
-            <View key={s} style={[styles.dot, i <= stepIndex && styles.dotActive]} />
+            <View key={s} style={[styles.dot, { backgroundColor: C.gray }, i <= stepIndex && { backgroundColor: C.primary }]} />
           ))}
         </View>
       )}
 
-      {/* ── Category ── */}
       {step === "category" && (
         <View style={styles.body}>
-          <ReusableText text="What is it?" family="bold" size={26} color={TEXT} />
+          <ReusableText text="What is it?" family="bold" size={26} color={C.secondary} />
           <View style={{ height: 24 }} />
           <View style={styles.grid}>
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat.value + cat.label}
-                style={[styles.catCard, category === cat.label && styles.catCardActive]}
+                style={[styles.catCard, { backgroundColor: C.white, borderColor: C.gray }, category === cat.label && { borderColor: C.primary, backgroundColor: C.primary1 }]}
                 onPress={() => setCategory(cat.label)}
                 activeOpacity={0.7}
               >
-                <Ionicons
-                  name={cat.icon}
-                  size={32}
-                  color={category === cat.label ? BLUE : SUBTEXT}
-                />
+                <Ionicons name={cat.icon} size={32} color={category === cat.label ? C.primary : C.gray2} />
                 <View style={{ height: 8 }} />
                 <ReusableText
                   text={cat.label}
                   family={category === cat.label ? "bold" : "regular"}
                   size={13}
-                  color={category === cat.label ? BLUE : TEXT}
+                  color={category === cat.label ? C.primary : C.secondary}
                 />
               </TouchableOpacity>
             ))}
@@ -189,93 +176,87 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
         </View>
       )}
 
-      {/* ── Name ── */}
       {step === "name" && (
         <View style={styles.body}>
-          <ReusableText text="What's the part name?" family="bold" size={26} color={TEXT} />
+          <ReusableText text="What's the part name?" family="bold" size={26} color={C.secondary} />
           <View style={{ height: 8 }} />
-          <ReusableText text={category} family="regular" size={15} color={BLUE} />
+          <ReusableText text={category} family="regular" size={15} color={C.primary} />
           <View style={{ height: 28 }} />
           <TextInput
-            style={styles.nameInput}
+            style={[styles.nameInput, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
             value={name}
             onChangeText={setName}
-            placeholder={`e.g. Toyota Brake Pad`}
-            placeholderTextColor={SUBTEXT}
+            placeholder="e.g. Toyota Brake Pad"
+            placeholderTextColor={C.gray2}
             autoFocus
             returnKeyType="done"
           />
         </View>
       )}
 
-      {/* ── Price ── */}
       {step === "price" && (
         <View style={styles.body}>
-          <ReusableText text="How much is it?" family="bold" size={26} color={TEXT} />
+          <ReusableText text="How much is it?" family="bold" size={26} color={C.secondary} />
           <View style={{ height: 40 }} />
           <View style={styles.priceRow}>
-            <ReusableText text="GH₵" family="bold" size={28} color={SUBTEXT} />
+            <ReusableText text="GH₵" family="bold" size={28} color={C.gray2} />
             <TextInput
-              style={styles.priceInput}
+              style={[styles.priceInput, { color: C.secondary }]}
               value={price}
               onChangeText={(v) => setPrice(v.replace(/[^0-9]/g, ""))}
               keyboardType="number-pad"
               placeholder="0"
-              placeholderTextColor={BORDER}
+              placeholderTextColor={C.gray}
               autoFocus
             />
           </View>
         </View>
       )}
 
-      {/* ── Quantity ── */}
       {step === "quantity" && (
         <View style={styles.body}>
-          <ReusableText text="How many do you have?" family="bold" size={26} color={TEXT} />
+          <ReusableText text="How many do you have?" family="bold" size={26} color={C.secondary} />
           <View style={{ height: 48 }} />
           <View style={styles.stepperRow}>
             <TouchableOpacity
-              style={styles.stepBtn}
+              style={[styles.stepBtn, { backgroundColor: C.white, borderColor: C.gray }]}
               onPress={() => setQuantity((q) => Math.max(0, q - 1))}
             >
-              <ReusableText text="−" family="bold" size={28} color={TEXT} />
+              <ReusableText text="−" family="bold" size={28} color={C.secondary} />
             </TouchableOpacity>
-            <ReusableText text={String(quantity)} family="bold" size={56} color={TEXT} />
+            <ReusableText text={String(quantity)} family="bold" size={56} color={C.secondary} />
             <TouchableOpacity
-              style={styles.stepBtn}
+              style={[styles.stepBtn, { backgroundColor: C.white, borderColor: C.gray }]}
               onPress={() => setQuantity((q) => q + 1)}
             >
-              <ReusableText text="+" family="bold" size={28} color={TEXT} />
+              <ReusableText text="+" family="bold" size={28} color={C.secondary} />
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* ── Photo ── */}
       {step === "photo" && (
         <View style={styles.body}>
-          <ReusableText text="Add photos of the part" family="bold" size={26} color={TEXT} />
+          <ReusableText text="Add photos of the part" family="bold" size={26} color={C.secondary} />
           <View style={{ height: 6 }} />
-          <ReusableText text="More photos help buyers trust you" family="regular" size={14} color={SUBTEXT} />
+          <ReusableText text="More photos help buyers trust you" family="regular" size={14} color={C.gray2} />
           <View style={{ height: 24 }} />
 
           {photoUris.length === 0 ? (
-            /* No photos yet — show camera / gallery tiles */
-            <View style={styles.photoArea}>
+            <View style={[styles.photoArea, { backgroundColor: C.white, borderColor: C.gray }]}>
               <TouchableOpacity style={styles.photoOption} onPress={() => void addFromCamera()}>
-                <Ionicons name="camera-outline" size={36} color={BLUE} />
+                <Ionicons name="camera-outline" size={36} color={C.primary} />
                 <View style={{ height: 8 }} />
-                <ReusableText text="Camera" family="medium" size={14} color={TEXT} />
+                <ReusableText text="Camera" family="medium" size={14} color={C.secondary} />
               </TouchableOpacity>
-              <View style={styles.photoDivider} />
+              <View style={[styles.photoDivider, { backgroundColor: C.gray }]} />
               <TouchableOpacity style={styles.photoOption} onPress={() => void addFromGallery()}>
-                <Ionicons name="image-outline" size={36} color={BLUE} />
+                <Ionicons name="image-outline" size={36} color={C.primary} />
                 <View style={{ height: 8 }} />
-                <ReusableText text="Gallery" family="medium" size={14} color={TEXT} />
+                <ReusableText text="Gallery" family="medium" size={14} color={C.secondary} />
               </TouchableOpacity>
             </View>
           ) : (
-            /* Has photos — thumbnail strip + add-more tile */
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
               {photoUris.map((uri, idx) => (
                 <View key={uri + idx} style={styles.thumbWrap}>
@@ -285,77 +266,68 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
                   </TouchableOpacity>
                 </View>
               ))}
-              {/* Add-more tile */}
-              <TouchableOpacity style={styles.thumbAdd} onPress={promptAddMore} disabled={uploading}>
-                <Ionicons name="add" size={32} color={uploading ? SUBTEXT : BLUE} />
+              <TouchableOpacity style={[styles.thumbAdd, { borderColor: C.primary, backgroundColor: C.primary1 }]} onPress={promptAddMore} disabled={uploading}>
+                <Ionicons name="add" size={32} color={uploading ? C.gray2 : C.primary} />
                 <View style={{ height: 4 }} />
-                <ReusableText
-                  text={uploading ? "Uploading…" : "Add more"}
-                  family="regular"
-                  size={11}
-                  color={uploading ? SUBTEXT : BLUE}
-                />
+                <ReusableText text={uploading ? "Uploading…" : "Add more"} family="regular" size={11} color={uploading ? C.gray2 : C.primary} />
               </TouchableOpacity>
             </ScrollView>
           )}
 
           {uploading && photoUris.length === 0 && (
             <View style={{ marginTop: 12 }}>
-              <ReusableText text="Uploading…" family="regular" size={13} color={SUBTEXT} />
+              <ReusableText text="Uploading…" family="regular" size={13} color={C.gray2} />
             </View>
           )}
         </View>
       )}
 
-      {/* ── Condition ── */}
       {step === "condition" && (
         <View style={styles.body}>
-          <ReusableText text="What's the condition?" family="bold" size={26} color={TEXT} />
+          <ReusableText text="What's the condition?" family="bold" size={26} color={C.secondary} />
           <View style={{ height: 32 }} />
           {(["NEW", "USED", "REFURBISHED"] as const).map((c) => (
             <TouchableOpacity
               key={c}
-              style={[styles.condOption, condition === c && styles.condOptionActive]}
+              style={[styles.condOption, { backgroundColor: C.white, borderColor: C.gray }, condition === c && { borderColor: C.primary, backgroundColor: C.primary1 }]}
               onPress={() => setCondition(c)}
             >
               <ReusableText
                 text={c === "NEW" ? "New" : c === "USED" ? "Used" : "Refurbished"}
                 family={condition === c ? "bold" : "regular"}
                 size={16}
-                color={condition === c ? BLUE : TEXT}
+                color={condition === c ? C.primary : C.secondary}
               />
             </TouchableOpacity>
           ))}
         </View>
       )}
 
-      {/* ── Success ── */}
       {step === "success" && (
         <View style={[styles.body, styles.successBody]}>
-          <View style={styles.successIcon}>
-            <Ionicons name="checkmark-outline" size={40} color={BLUE} />
+          <View style={[styles.successIcon, { backgroundColor: C.primary1, borderColor: C.primary }]}>
+            <Ionicons name="checkmark-outline" size={40} color={C.primary} />
           </View>
           <View style={{ height: 20 }} />
-          <ReusableText text="Part added" family="bold" size={28} color={TEXT} />
+          <ReusableText text="Part added" family="bold" size={28} color={C.secondary} />
           <View style={{ height: 8 }} />
-          <ReusableText text="Buyers can now see this part." family="regular" size={16} color={SUBTEXT} />
+          <ReusableText text="Buyers can now see this part." family="regular" size={16} color={C.gray2} />
           <View style={{ height: 40 }} />
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.replace("AddPartWizard")}>
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: C.primary }]} onPress={() => navigation.replace("AddPartWizard")}>
             <ReusableText text="Add another part" family="bold" size={16} color="#fff" />
           </TouchableOpacity>
           <View style={{ height: 12 }} />
           <TouchableOpacity onPress={() => navigation.navigate("ProductsList")}>
-            <ReusableText text="Back to my parts" family="regular" size={15} color={SUBTEXT} />
+            <ReusableText text="Back to my parts" family="regular" size={15} color={C.gray2} />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Bottom nav */}
       {step !== "success" && (
         <View style={styles.nav}>
           {stepIndex > 0 ? (
             <TouchableOpacity style={styles.backBtn} onPress={back}>
-              <ReusableText text="Back" family="medium" size={16} color={SUBTEXT} />
+              <ReusableText text="Back" family="medium" size={16} color={C.gray2} />
             </TouchableOpacity>
           ) : (
             <View style={{ flex: 1 }} />
@@ -363,7 +335,7 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
 
           {step === "condition" ? (
             <TouchableOpacity
-              style={[styles.primaryBtn, styles.navPrimary, saving && styles.btnDisabled]}
+              style={[styles.primaryBtn, styles.navPrimary, { backgroundColor: C.primary }, saving && styles.btnDisabled]}
               onPress={save}
               disabled={saving}
             >
@@ -371,7 +343,7 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
             </TouchableOpacity>
           ) : step === "photo" ? (
             <TouchableOpacity
-              style={[styles.primaryBtn, styles.navPrimary, uploading && styles.btnDisabled]}
+              style={[styles.primaryBtn, styles.navPrimary, { backgroundColor: C.primary }, uploading && styles.btnDisabled]}
               onPress={next}
               disabled={uploading}
             >
@@ -382,6 +354,7 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
               style={[
                 styles.primaryBtn,
                 styles.navPrimary,
+                { backgroundColor: C.primary },
                 (step === "category" && !category) || (step === "name" && !name.trim()) || (step === "price" && !price)
                   ? styles.btnDisabled
                   : null,
@@ -405,7 +378,6 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
     paddingHorizontal: 20,
   },
   progressRow: {
@@ -417,56 +389,28 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 4,
     borderRadius: 2,
-    backgroundColor: BORDER,
   },
-  dotActive: {
-    backgroundColor: BLUE,
-  },
-  body: {
-    flex: 1,
-    paddingTop: 20,
-  },
-  successBody: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
+  body: { flex: 1, paddingTop: 20 },
+  successBody: { alignItems: "center", justifyContent: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   catCard: {
     width: "46%",
-    backgroundColor: CARD,
     borderRadius: 14,
     padding: 20,
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: BORDER,
-  },
-  catCardActive: {
-    borderColor: BLUE,
-    backgroundColor: "#EBF4FF",
   },
   nameInput: {
-    backgroundColor: CARD,
     borderRadius: 12,
     padding: 18,
     fontSize: 20,
-    color: TEXT,
     borderWidth: 1.5,
-    borderColor: BORDER,
   },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   priceInput: {
     flex: 1,
     fontSize: 56,
     fontFamily: "bold",
-    color: TEXT,
     paddingVertical: 0,
   },
   stepperRow: {
@@ -479,43 +423,21 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: CARD,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: BORDER,
   },
   photoArea: {
     flexDirection: "row",
-    backgroundColor: CARD,
     borderRadius: 16,
     overflow: "hidden",
     height: 180,
     borderWidth: 1,
-    borderColor: BORDER,
   },
-  photoOption: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  photoDivider: {
-    width: 1,
-    backgroundColor: BORDER,
-    marginVertical: 24,
-  },
-  thumbWrap: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
-    marginRight: 10,
-    overflow: "visible",
-  },
-  thumb: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
-  },
+  photoOption: { flex: 1, alignItems: "center", justifyContent: "center" },
+  photoDivider: { width: 1, marginVertical: 24 },
+  thumbWrap: { width: 100, height: 100, borderRadius: 12, marginRight: 10, overflow: "visible" },
+  thumb: { width: 100, height: 100, borderRadius: 12 },
   thumbRemove: {
     position: "absolute",
     top: -6,
@@ -529,56 +451,32 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: BLUE,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EBF4FF",
   },
   condOption: {
-    backgroundColor: CARD,
     borderRadius: 12,
     padding: 18,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: BORDER,
-  },
-  condOptionActive: {
-    borderColor: BLUE,
-    backgroundColor: "#EBF4FF",
   },
   successIcon: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#EBF4FF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: BLUE,
   },
-  nav: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingTop: 16,
-  },
-  backBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
+  nav: { flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 16 },
+  backBtn: { flex: 1, paddingVertical: 16, alignItems: "center" },
   primaryBtn: {
-    backgroundColor: BLUE,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 32,
     alignItems: "center",
   },
-  navPrimary: {
-    flex: 2,
-  },
-  btnDisabled: {
-    opacity: 0.4,
-  },
+  navPrimary: { flex: 2 },
+  btnDisabled: { opacity: 0.4 },
 });

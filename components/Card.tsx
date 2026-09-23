@@ -1,6 +1,6 @@
 import React from "react";
 import { TouchableOpacity, View } from "react-native";
-import { SHADOWS, COLORS } from "../constants/theme";
+import { SHADOWS, useThemeColors } from "../constants/theme";
 
 type Props = {
   children: React.ReactNode;
@@ -19,8 +19,9 @@ export default function Card({
   borderRadius = 10,
   style,
 }: Props) {
+  const C = useThemeColors();
   const base = {
-    backgroundColor: COLORS.white,
+    backgroundColor: C.white,
     borderRadius,
     padding,
     ...SHADOWS.small,

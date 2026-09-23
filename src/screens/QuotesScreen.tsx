@@ -7,7 +7,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getAssignments, getAllQuoteQueueStatusMap, type Assignment, type QuoteSyncStatus } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
 import { StatusBadge, Card, ReusableText, HeightSpacer, WidthSpacer, SyncStatusIcon } from "../../components";
-import { COLORS, SIZES } from "../../constants/theme";
+import { SIZES, useThemeColors } from "../../constants/theme";
 import type { TabParamList } from "../navigation/TabNavigator";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
 
@@ -22,6 +22,7 @@ type RequestData = { partName: string; make?: string; model?: string; year?: num
 type QuoteData  = { priceGhs: number; availability: string; notes?: string };
 
 export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
+  const C = useThemeColors();
   const [rows, setRows] = useState<Assignment[]>([]);
   const [syncStatusMap, setSyncStatusMap] = useState<Record<string, QuoteSyncStatus>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -46,25 +47,25 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
   }, [startSync, load]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.offwhite }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.offwhite }} edges={['top']}>
     <FlatList
       data={rows}
       keyExtractor={(r) => r.id}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { backgroundColor: C.offwhite }]}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => void onRefresh()}
-          tintColor={COLORS.primary}
+          tintColor={C.primary}
         />
       }
       ListEmptyComponent={
         <View style={styles.emptyContainer}>
-          <ReusableText text="📋" family="regular" size={48} color={COLORS.gray2} />
+          <ReusableText text="📋" family="regular" size={48} color={C.gray2} />
           <HeightSpacer height={12} />
-          <ReusableText text="No quotes yet" family="medium" size={SIZES.medium} color={COLORS.secondary} />
+          <ReusableText text="No quotes yet" family="medium" size={SIZES.medium} color={C.secondary} />
           <HeightSpacer height={6} />
-          <ReusableText text="When you submit a quote it will appear here" family="regular" size={SIZES.small} color={COLORS.gray2} />
+          <ReusableText text="When you submit a quote it will appear here" family="regular" size={SIZES.small} color={C.gray2} />
         </View>
       }
       renderItem={({ item }) => {
@@ -82,7 +83,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
           >
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <ReusableText text={req.partName} family="medium" size={15} color={COLORS.secondary} numberOfLines={1} />
+                <ReusableText text={req.partName} family="medium" size={15} color={C.secondary} numberOfLines={1} />
               </View>
               <WidthSpacer width={8} />
               <StatusBadge status={item.status} />
@@ -95,7 +96,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
                     text={`GHS ${quote.priceGhs} · ${quote.availability}`}
                     family="regular"
                     size={SIZES.small}
-                    color={COLORS.gray2}
+                    color={C.gray2}
                   />
                   {syncStatusMap[item.id] != null && (
                     <SyncStatusIcon status={syncStatusMap[item.id]} />
@@ -112,7 +113,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 12, backgroundColor: COLORS.offwhite, flexGrow: 1 },
+  list: { padding: 12, flexGrow: 1 },
   emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   quoteRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

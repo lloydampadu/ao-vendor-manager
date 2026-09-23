@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, View, Text } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { api } from '@/lib/api';
 import { ReusableBtn, ReusableText, HeightSpacer } from '../../components';
-import { COLORS, SIZES } from '../../constants/theme';
+import { SIZES, useThemeColors } from '../../constants/theme';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props): React.JSX.Element {
+  const C = useThemeColors();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -32,34 +33,34 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: C.white }]}>
       <View style={styles.container}>
-        <ReusableText text="AO Direct" family="xtrabold" size={SIZES.large} color={COLORS.primary} />
+        <ReusableText text="AO Direct" family="xtrabold" size={SIZES.large} color={C.primary} />
         <HeightSpacer height={8} />
-        <ReusableText text="Vendor sign-in" family="bold" size={32} color={COLORS.secondary} />
+        <ReusableText text="Vendor sign-in" family="bold" size={32} color={C.secondary} />
         <HeightSpacer height={8} />
         <ReusableText
           text="Enter the phone number registered with AbosseyOkai Direct."
           family="regular"
           size={SIZES.small}
-          color={COLORS.gray2}
+          color={C.gray2}
         />
         <HeightSpacer height={24} />
 
-        <ReusableText text="Phone number" family="medium" size={SIZES.small} color={COLORS.secondary} />
+        <ReusableText text="Phone number" family="medium" size={SIZES.small} color={C.secondary} />
         <HeightSpacer height={6} />
         <TextInput
-          style={[styles.input, error ? styles.inputError : null]}
+          style={[styles.input, { borderColor: error ? C.red : C.gray, color: C.secondary, backgroundColor: C.offwhite }]}
           keyboardType="phone-pad"
           placeholder="0244 123 456"
-          placeholderTextColor={COLORS.gray2}
+          placeholderTextColor={C.gray2}
           value={phone}
           onChangeText={(t) => { setPhone(t); setError(undefined); }}
         />
         {error ? (
           <>
             <HeightSpacer height={4} />
-            <ReusableText text={error} family="regular" size={SIZES.xSmall} color={COLORS.red} />
+            <ReusableText text={error} family="regular" size={SIZES.xSmall} color={C.red} />
           </>
         ) : null}
 
@@ -67,8 +68,8 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
         <ReusableBtn
           onPress={() => void send()}
           btnText={loading ? 'Sending…' : 'Send code'}
-          backgroundColor={loading ? COLORS.gray2 : COLORS.primary}
-          textColor={COLORS.white}
+          backgroundColor={loading ? C.gray2 : C.primary}
+          textColor={C.white}
           width="100%"
           height={52}
           borderRadius={12}
@@ -80,18 +81,14 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+  safe: { flex: 1 },
   container: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
   input: {
     height: 52,
     borderWidth: 1.5,
-    borderColor: COLORS.gray,
     borderRadius: 12,
     paddingHorizontal: 14,
     fontFamily: 'regular',
     fontSize: SIZES.medium,
-    color: COLORS.black,
-    backgroundColor: COLORS.offwhite,
   },
-  inputError: { borderColor: COLORS.red },
 });

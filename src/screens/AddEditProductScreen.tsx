@@ -15,11 +15,12 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import { api } from "@/lib/api";
 import { uploadImage } from "@/lib/upload";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
-import { COLORS, SIZES } from "../../constants/theme";
+import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 import type { Product } from "./ProductsScreen";
 
 type RouteProps = RouteProp<ProductsStackParamList, "AddEditProduct">;
+type Colors = typeof LIGHT_COLORS;
 
 const CONDITIONS: Product["condition"][] = ["NEW", "USED", "REFURBISHED"];
 const CONDITION_LABEL: Record<Product["condition"], string> = {
@@ -29,6 +30,7 @@ const CONDITION_LABEL: Record<Product["condition"], string> = {
 };
 
 export default function AddEditProductScreen(): React.JSX.Element {
+  const C = useThemeColors();
   const nav = useNavigation();
   const route = useRoute<RouteProps>();
   const existing = route.params?.product as Product | undefined;
@@ -71,7 +73,6 @@ export default function AddEditProductScreen(): React.JSX.Element {
     if (!name.trim()) { Alert.alert("Please enter the product name"); return; }
     const priceGhs = parseInt(price, 10);
     if (!priceGhs || priceGhs <= 0) { Alert.alert("Please enter a valid price"); return; }
-
     if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
     setSaving(true);
     try {
@@ -90,60 +91,60 @@ export default function AddEditProductScreen(): React.JSX.Element {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Field label="Product Name *">
+    <ScrollView style={[styles.container, { backgroundColor: C.offwhite }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Field label="Product Name *" C={C}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
           value={name}
           onChangeText={setName}
           placeholder="e.g. Toyota Corolla 2018 Alternator"
-          placeholderTextColor={COLORS.gray2}
+          placeholderTextColor={C.gray2}
         />
       </Field>
 
-      <Field label="Price (GHS) *">
+      <Field label="Price (GHS) *" C={C}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
           value={price}
           onChangeText={setPrice}
           keyboardType="number-pad"
           placeholder="e.g. 450"
-          placeholderTextColor={COLORS.gray2}
+          placeholderTextColor={C.gray2}
         />
       </Field>
 
-      <Field label="Condition">
+      <Field label="Condition" C={C}>
         <View style={styles.conditionRow}>
           {CONDITIONS.map((c) => (
             <TouchableOpacity
               key={c}
-              style={[styles.conditionBtn, condition === c && styles.conditionBtnActive]}
+              style={[styles.conditionBtn, { borderColor: C.gray, backgroundColor: C.white }, condition === c && { backgroundColor: C.primary, borderColor: C.primary }]}
               onPress={() => setCondition(c)}
             >
               <ReusableText
                 text={CONDITION_LABEL[c]}
                 family="medium"
                 size={13}
-                color={condition === c ? COLORS.white : COLORS.gray2}
+                color={condition === c ? C.white : C.gray2}
               />
             </TouchableOpacity>
           ))}
         </View>
       </Field>
 
-      <Field label="Description (optional)">
+      <Field label="Description (optional)" C={C}>
         <TextInput
-          style={[styles.input, styles.textarea]}
+          style={[styles.input, styles.textarea, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
           value={description}
           onChangeText={setDescription}
           placeholder="Describe the condition, which cars it fits, etc."
-          placeholderTextColor={COLORS.gray2}
+          placeholderTextColor={C.gray2}
           multiline
           numberOfLines={3}
         />
       </Field>
 
-      <Field label={`Photos (${localUris.length}/4)`}>
+      <Field label={`Photos (${localUris.length}/4)`} C={C}>
         <View style={styles.photoGrid}>
           {localUris.map((uri, i) => (
             <View key={i} style={styles.photoWrapper}>
@@ -155,16 +156,16 @@ export default function AddEditProductScreen(): React.JSX.Element {
                   setPhotos((prev) => prev.filter((_, j) => j !== i));
                 }}
               >
-                <Ionicons name="close-circle" size={20} color={COLORS.red} />
+                <Ionicons name="close-circle" size={20} color={C.red} />
               </TouchableOpacity>
             </View>
           ))}
           {localUris.length < 4 && (
-            <TouchableOpacity style={styles.addPhoto} onPress={() => void pickPhoto()} disabled={uploading}>
+            <TouchableOpacity style={[styles.addPhoto, { borderColor: C.primary, backgroundColor: C.primary1 }]} onPress={() => void pickPhoto()} disabled={uploading}>
               {uploading ? (
-                <ActivityIndicator color={COLORS.primary} />
+                <ActivityIndicator color={C.primary} />
               ) : (
-                <Ionicons name="camera-outline" size={28} color={COLORS.primary} />
+                <Ionicons name="camera-outline" size={28} color={C.primary} />
               )}
             </TouchableOpacity>
           )}
@@ -175,12 +176,12 @@ export default function AddEditProductScreen(): React.JSX.Element {
         style={[styles.stockToggle, inStock ? styles.stockIn : styles.stockOut]}
         onPress={() => setInStock((v) => !v)}
       >
-        <Ionicons name={inStock ? "checkmark-circle" : "close-circle"} size={20} color={inStock ? "#16a34a" : COLORS.red} />
+        <Ionicons name={inStock ? "checkmark-circle" : "close-circle"} size={20} color={inStock ? "#16a34a" : C.red} />
         <ReusableText
           text={`${inStock ? "In Stock" : "Out of Stock"} — tap to toggle`}
           family="medium"
           size={14}
-          color={inStock ? "#16a34a" : COLORS.red}
+          color={inStock ? "#16a34a" : C.red}
         />
       </TouchableOpacity>
 
@@ -188,8 +189,8 @@ export default function AddEditProductScreen(): React.JSX.Element {
       <ReusableBtn
         onPress={() => void save()}
         btnText={saving ? "Saving…" : uploading ? "Uploading photo…" : existing ? "Save Changes" : "Add Product"}
-        backgroundColor={saving || uploading ? COLORS.gray2 : COLORS.primary}
-        textColor={COLORS.white}
+        backgroundColor={saving || uploading ? C.gray2 : C.primary}
+        textColor={C.white}
         width="100%"
         height={52}
         borderRadius={12}
@@ -199,10 +200,10 @@ export default function AddEditProductScreen(): React.JSX.Element {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, C }: { label: string; children: React.ReactNode; C: Colors }) {
   return (
     <View style={styles.field}>
-      <ReusableText text={label} family="bold" size={SIZES.xSmall} color={COLORS.primary} />
+      <ReusableText text={label} family="bold" size={SIZES.xSmall} color={C.primary} />
       <HeightSpacer height={6} />
       {children}
     </View>
@@ -210,18 +211,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.offwhite },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   field: { marginBottom: 16 },
   input: {
-    backgroundColor: COLORS.white,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: COLORS.gray,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: SIZES.medium,
-    color: COLORS.secondary,
     fontFamily: "regular",
   },
   textarea: { height: 80, textAlignVertical: "top" },
@@ -229,13 +227,10 @@ const styles = StyleSheet.create({
   conditionBtn: {
     flex: 1,
     borderWidth: 1.5,
-    borderColor: COLORS.gray,
     borderRadius: 10,
     padding: 10,
     alignItems: "center",
-    backgroundColor: COLORS.white,
   },
-  conditionBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   photoWrapper: { position: "relative" },
   photo: { width: 80, height: 80, borderRadius: 8 },
@@ -245,11 +240,9 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: COLORS.primary1,
   },
   stockToggle: {
     flexDirection: "row",

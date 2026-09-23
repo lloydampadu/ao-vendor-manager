@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import { Animated, StyleSheet } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import ReusableText from "./Reusable/ReusableText";
-import { COLORS } from "../constants/theme";
+import { useThemeColors } from "../constants/theme";
 
 export function OfflineBanner() {
+  const C = useThemeColors();
   const [isOffline, setIsOffline] = useState(false);
   const slideAnim = React.useRef(new Animated.Value(-40)).current;
 
@@ -25,7 +26,7 @@ export function OfflineBanner() {
 
   return (
     <Animated.View style={[styles.banner, { transform: [{ translateY: slideAnim }] }]}>
-      <ReusableText text="No internet connection" family="medium" size={13} color={COLORS.white} />
+      <ReusableText text="No internet connection" family="medium" size={13} color={C.white} />
     </Animated.View>
   );
 }
