@@ -36,7 +36,8 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   const [refreshing, setRefreshing] = useState(false);
   const { startSync } = useSyncStore();
   const isFocused = useIsFocused();
-  // Fingerprint per segment — skip re-render when data is unchanged
+  // Track which segment's data is currently in state + last fingerprint per segment
+  const loadedSegmentRef = useRef<Segment | null>(null);
   const lastFpRef = useRef<Partial<Record<Segment, string>>>({});
 
   const load = useCallback(async (silent = false) => {
@@ -46,8 +47,11 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
     await initDb();
     const rows = await getAssignments(segment);
     const fp = rows.map((a) => `${a.id}:${a.status}:${a.updated_at}`).join("|");
-    if (fp !== lastFpRef.current[segment]) {
+    // Always update when the segment in state differs from what we just loaded,
+    // otherwise only update if the data actually changed (avoids flicker on bg reloads)
+    if (loadedSegmentRef.current !== segment || fp !== lastFpRef.current[segment]) {
       lastFpRef.current[segment] = fp;
+      loadedSegmentRef.current = segment;
       setAssignments(rows);
     }
     segmentLoaded[segment] = true;
