@@ -11,7 +11,7 @@ export async function uploadImage(uri: string): Promise<string> {
   const uploadPromise = FileSystem.uploadAsync(`${BASE}/vendor/upload`, uri, {
     fieldName: "file",
     httpMethod: "POST",
-    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    uploadType: 1 as FileSystem.FileSystemUploadType, // 1 = MULTIPART
     mimeType: "image/jpeg",
     headers: { Authorization: `Bearer ${token}` },
   });
