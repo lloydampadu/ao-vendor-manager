@@ -2,13 +2,13 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
@@ -45,7 +45,7 @@ export default function AddEditProductScreen(): React.JSX.Element {
 
   async function pickPhoto(): Promise<void> {
     if (photos.length >= 4) {
-      Alert.alert("Max 4 photos");
+      Alert.alert("You can only add 4 photos");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -61,16 +61,16 @@ export default function AddEditProductScreen(): React.JSX.Element {
       setPhotos((prev) => [...prev, url]);
     } catch (e) {
       setLocalUris((prev) => prev.filter((u) => u !== localUri));
-      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
+      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload the photo. Try again.");
     } finally {
       setUploading(false);
     }
   }
 
   async function save(): Promise<void> {
-    if (!name.trim()) { Alert.alert("Enter a product name"); return; }
+    if (!name.trim()) { Alert.alert("Please enter the product name"); return; }
     const priceGhs = parseInt(price, 10);
-    if (!priceGhs || priceGhs <= 0) { Alert.alert("Enter a valid price"); return; }
+    if (!priceGhs || priceGhs <= 0) { Alert.alert("Please enter a valid price"); return; }
 
     if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
     setSaving(true);
@@ -83,7 +83,7 @@ export default function AddEditProductScreen(): React.JSX.Element {
       }
       nav.goBack();
     } catch (e: unknown) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Could not save product");
+      Alert.alert("Something went wrong", e instanceof Error ? e.message : "Could not save. Try again.");
     } finally {
       setSaving(false);
     }
@@ -136,7 +136,7 @@ export default function AddEditProductScreen(): React.JSX.Element {
           style={[styles.input, styles.textarea]}
           value={description}
           onChangeText={setDescription}
-          placeholder="Condition details, fitment notes, etc."
+          placeholder="Describe the condition, which cars it fits, etc."
           placeholderTextColor={COLORS.gray2}
           multiline
           numberOfLines={3}
@@ -147,7 +147,7 @@ export default function AddEditProductScreen(): React.JSX.Element {
         <View style={styles.photoGrid}>
           {localUris.map((uri, i) => (
             <View key={i} style={styles.photoWrapper}>
-              <Image source={{ uri }} style={styles.photo} resizeMode="cover" />
+              <Image source={uri} style={styles.photo} contentFit="cover" cachePolicy="disk" />
               <TouchableOpacity
                 style={styles.removePhoto}
                 onPress={() => {

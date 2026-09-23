@@ -106,14 +106,14 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
             <ReusableText text="📭" family="regular" size={48} color={COLORS.gray2} />
             <HeightSpacer height={12} />
             <ReusableText
-              text={segment === "PENDING" ? "No new requests" : segment === "QUOTED" ? "No quotes submitted yet" : "No declined requests"}
+              text={segment === "PENDING" ? "No new requests" : segment === "QUOTED" ? "No quotes sent yet" : "No declined requests"}
               family="medium"
               size={SIZES.medium}
               color={COLORS.secondary}
             />
             <HeightSpacer height={6} />
             <ReusableText
-              text={segment === "PENDING" ? "Pull down to refresh for new jobs" : "Quoted jobs will appear here"}
+              text={segment === "PENDING" ? "Pull down to check for new requests" : "Your sent quotes will show here"}
               family="regular"
               size={SIZES.small}
               color={COLORS.gray2}

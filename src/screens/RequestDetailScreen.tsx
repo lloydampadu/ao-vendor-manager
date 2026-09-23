@@ -140,7 +140,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
     await load();
     setEditingQuote(false);
     startSync().catch(() => {});
-    Alert.alert("Quote saved", "It will sync automatically.", [
+    Alert.alert("Quote sent", "We will send it when you are back online.", [
       { text: "OK", onPress: () => navigation.goBack() },
     ]);
   }
@@ -154,13 +154,13 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       setEditingQuote(false);
       Alert.alert("Quote updated", "Your changes have been saved.");
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Could not update quote");
+      Alert.alert("Something went wrong", e instanceof Error ? e.message : "Could not update your quote. Try again.");
     }
   }
 
   function decline() {
     if (!row) return;
-    Alert.alert("Decline request", "Are you sure?", [
+    Alert.alert("You don't have this part?", "Are you sure you want to say you don't have it?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Decline",
@@ -177,7 +177,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             await enqueueDecline(item);
             await updateAssignmentStatus(row.id, "DECLINED");
             startSync().catch(() => {});
-            Alert.alert("Decline saved", "It will sync automatically.", [
+            Alert.alert("OK, noted", "We will update it when you are back online.", [
               { text: "OK", onPress: () => navigation.goBack() },
             ]);
           })();
@@ -280,7 +280,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             <ReusableText text="🎉 Your quote was selected!" family="bold" size={17} color="#155724" />
             <HeightSpacer height={6} />
             <ReusableText
-              text="The customer chose your quote. Prepare the item and await their collection or delivery arrangement."
+              text="The customer picked your price. Get the part ready. They will contact you for pickup or delivery."
               family="regular"
               size={SIZES.small}
               color="#155724"
@@ -288,7 +288,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           </Card>
           {quote && (
             <Card>
-              <ReusableText text="Your winning quote" family="bold" size={15} color={COLORS.secondary} />
+              <ReusableText text="Your winning price" family="bold" size={15} color={COLORS.secondary} />
               <HeightSpacer height={8} />
               {quote.prices && quote.prices.length > 0 ? (
                 quote.prices.map((p) => (
@@ -312,13 +312,13 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {/* PENDING: quote form */}
       {row.status === "PENDING" && (
         <Card>
-          <ReusableText text="Submit Your Quote" family="bold" size={16} color={COLORS.secondary} />
+          <ReusableText text="Send Your Price" family="bold" size={16} color={COLORS.secondary} />
           <HeightSpacer height={12} />
           <QuoteForm assignmentId={row.id} feePaid={true} partName={req.partName} onSubmit={(payload) => submitQuote(payload)} />
           <HeightSpacer height={8} />
           <ReusableBtn
             onPress={decline}
-            btnText="I don't have this item"
+            btnText="I don't have this part"
             backgroundColor="transparent"
             textColor={COLORS.primary}
             width="100%"
@@ -333,7 +333,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {row.status === "QUOTED" && quote !== null && !editingQuote && (
         <Card>
           <View style={styles.row}>
-            <ReusableText text="Your submitted quote" family="bold" size={16} color={COLORS.secondary} />
+            <ReusableText text="Your quote" family="bold" size={16} color={COLORS.secondary} />
             {quoteSyncStatus != null && <SyncStatusIcon status={quoteSyncStatus} />}
           </View>
           <HeightSpacer height={8} />
@@ -354,7 +354,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <HeightSpacer height={12} />
           <ReusableBtn
             onPress={() => setEditingQuote(true)}
-            btnText="Edit Quote"
+            btnText="Change Quote"
             backgroundColor={COLORS.white}
             textColor={COLORS.primary}
             width="100%"
@@ -371,7 +371,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {row.status === "QUOTED" && editingQuote && (
         <Card>
           <View style={styles.row}>
-            <ReusableText text="Edit Your Quote" family="bold" size={16} color={COLORS.secondary} />
+            <ReusableText text="Change Your Quote" family="bold" size={16} color={COLORS.secondary} />
             <ReusableBtn
               onPress={() => setEditingQuote(false)}
               btnText="Cancel"
@@ -399,7 +399,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       {(row.status === "EXPIRED" || row.status === "DECLINED") && (
         <Card style={styles.closedCard}>
           <ReusableText
-            text={row.status === "EXPIRED" ? "This request has closed." : "You declined this request."}
+            text={row.status === "EXPIRED" ? "This request is closed." : "You said you don't have this part."}
             family="regular"
             size={SIZES.medium}
             color={COLORS.gray2}

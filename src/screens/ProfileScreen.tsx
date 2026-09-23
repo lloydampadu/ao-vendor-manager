@@ -22,7 +22,7 @@ export default function ProfileScreen(): React.JSX.Element {
   }, []);
 
   function logout(): void {
-    Alert.alert("Log out", "Are you sure?", [
+    Alert.alert("Log out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log out",
@@ -77,7 +77,7 @@ export default function ProfileScreen(): React.JSX.Element {
           style={styles.editSpecialties}
           onPress={() => rootNav.navigate("Onboarding")}
         >
-          <ReusableText text="Edit what I sell" family="medium" size={SIZES.small} color={COLORS.primary} />
+          <ReusableText text="Change what I sell" family="medium" size={SIZES.small} color={COLORS.primary} />
         </TouchableOpacity>
 
         <HeightSpacer height={16} />

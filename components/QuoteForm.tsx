@@ -125,7 +125,7 @@ export function QuoteForm({
           clearInterval(timerRef.current!);
           setExpired(true);
           setConfirmed(false);
-          Alert.alert("Time's up", "You didn't take a photo in time. Slide again to try.");
+          Alert.alert("Too slow", "You didn't take a photo in time. Try again.");
           return PHOTO_WINDOW_SECONDS;
         }
         return s - 1;
@@ -147,7 +147,7 @@ export function QuoteForm({
   async function openCamera() {
     const camPerm = await ImagePicker.requestCameraPermissionsAsync();
     if (!camPerm.granted) {
-      Alert.alert("Camera required", "Please allow camera access to prove you have this part.");
+      Alert.alert("Camera needed", "Please allow camera access to continue.");
       setConfirmed(false);
       return;
     }
@@ -196,8 +196,8 @@ export function QuoteForm({
     const priceEntries: PriceEntry[] = CONDITION_OPTIONS
       .map((c) => ({ condition: c, priceGhs: parseInt(prices[c], 10) }))
       .filter((e) => e.priceGhs > 0);
-    if (priceEntries.length === 0) { Alert.alert("Enter at least one price"); return; }
-    if (feePaid && !photoUrl) { Alert.alert("Photo required", "Slide to confirm you have the part and take a photo."); return; }
+    if (priceEntries.length === 0) { Alert.alert("No price entered", "Please enter a price for at least one condition."); return; }
+    if (feePaid && !photoUrl) { Alert.alert("Photo needed", "Please slide to confirm you have the part, then take a photo."); return; }
     setSubmitting(true);
     try {
       await onSubmit({
@@ -214,9 +214,9 @@ export function QuoteForm({
 
   return (
     <View>
-      <ReusableText text="Your prices (GHS)" family="medium" size={SIZES.small} color={COLORS.secondary} />
+      <ReusableText text="Your price (GHS)" family="medium" size={SIZES.small} color={COLORS.secondary} />
       <HeightSpacer height={4} />
-      <ReusableText text="Fill in a price for each condition you have available." family="regular" size={11} color={COLORS.gray2} />
+      <ReusableText text="Enter a price for each type you have. Leave blank if you don't have it." family="regular" size={11} color={COLORS.gray2} />
       <HeightSpacer height={10} />
       {CONDITION_OPTIONS.map((opt) => (
         <View key={opt} style={styles.conditionPriceRow}>
@@ -228,7 +228,7 @@ export function QuoteForm({
             value={prices[opt]}
             onChangeText={(v) => setPrices((prev) => ({ ...prev, [opt]: v }))}
             keyboardType="number-pad"
-            placeholder="Leave blank if N/A"
+            placeholder="Leave empty if you don't have it"
             placeholderTextColor={COLORS.gray2}
           />
         </View>
@@ -244,7 +244,7 @@ export function QuoteForm({
               <View style={styles.proofRow}>
                 <NetworkImage source={localUri!} width={80} height={80} radius={8} />
                 <View style={{ flex: 1 }}>
-                  <ReusableText text="✓ Proof photo taken" family="medium" size={SIZES.small} color="#16a34a" />
+                  <ReusableText text="✓ Photo taken" family="medium" size={SIZES.small} color="#16a34a" />
                   {location && (
                     <>
                       <HeightSpacer height={4} />
@@ -284,7 +284,7 @@ export function QuoteForm({
                   )}
                   <HeightSpacer height={8} />
                   <TouchableOpacity onPress={resetPhoto}>
-                    <ReusableText text="Retake photo" family="regular" size={11} color={COLORS.primary} />
+                    <ReusableText text="Take again" family="regular" size={11} color={COLORS.primary} />
                   </TouchableOpacity>
                 </View>
                 {uploading && <ActivityIndicator color={COLORS.primary} />}
@@ -296,7 +296,7 @@ export function QuoteForm({
               <ReusableText text="Take the photo now!" family="bold" size={15} color={timerColor} />
               <HeightSpacer height={6} />
               <ReusableText
-                text={`${secondsLeft}s remaining`}
+                text={`${secondsLeft} seconds left`}
                 family="medium"
                 size={28}
                 color={timerColor}
@@ -315,7 +315,7 @@ export function QuoteForm({
               <ReusableText text="Do you have this part?" family="medium" size={SIZES.small} color={COLORS.secondary} />
               <HeightSpacer height={4} />
               <ReusableText
-                text="Slide to confirm — you'll have 90 seconds to take a live photo as proof."
+                text="Slide to confirm. You will have 90 seconds to take a photo of the part."
                 family="regular"
                 size={11}
                 color={COLORS.gray2}
@@ -330,7 +330,7 @@ export function QuoteForm({
       <HeightSpacer height={20} />
       <ReusableBtn
         onPress={() => void submit()}
-        btnText={submitting ? "Saving…" : (submitLabel ?? "Submit Quote")}
+        btnText={submitting ? "Sending…" : (submitLabel ?? "Send Quote")}
         backgroundColor={submitting ? COLORS.gray2 : COLORS.primary}
         textColor={COLORS.white}
         width="100%"
