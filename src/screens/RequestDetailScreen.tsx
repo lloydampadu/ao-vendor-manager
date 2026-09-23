@@ -51,6 +51,7 @@ type RequestData = {
 type QuoteData = {
   priceGhs: number;
   availability: string;
+  prices?: { condition: string; priceGhs: number }[];
   photos?: string[];
 };
 
@@ -289,9 +290,20 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             <Card>
               <ReusableText text="Your winning quote" family="bold" size={15} color={COLORS.secondary} />
               <HeightSpacer height={8} />
-              <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={22} color={COLORS.primary} />
-              <HeightSpacer height={4} />
-              <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+              {quote.prices && quote.prices.length > 0 ? (
+                quote.prices.map((p) => (
+                  <View key={p.condition} style={styles.quotePriceRow}>
+                    <ReusableText text={p.condition} family="regular" size={SIZES.small} color="#155724" />
+                    <ReusableText text={`GHS ${p.priceGhs}`} family="bold" size={20} color="#155724" />
+                  </View>
+                ))
+              ) : (
+                <>
+                  <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={22} color={COLORS.primary} />
+                  <HeightSpacer height={4} />
+                  <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+                </>
+              )}
             </Card>
           )}
         </>
@@ -325,9 +337,20 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
             {quoteSyncStatus != null && <SyncStatusIcon status={quoteSyncStatus} />}
           </View>
           <HeightSpacer height={8} />
-          <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={COLORS.primary} />
-          <HeightSpacer height={4} />
-          <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+          {quote.prices && quote.prices.length > 0 ? (
+            quote.prices.map((p) => (
+              <View key={p.condition} style={styles.quotePriceRow}>
+                <ReusableText text={p.condition} family="regular" size={SIZES.small} color={COLORS.gray2} />
+                <ReusableText text={`GHS ${p.priceGhs}`} family="bold" size={18} color={COLORS.primary} />
+              </View>
+            ))
+          ) : (
+            <>
+              <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={COLORS.primary} />
+              <HeightSpacer height={4} />
+              <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
+            </>
+          )}
           <HeightSpacer height={12} />
           <ReusableBtn
             onPress={() => setEditingQuote(true)}
@@ -403,6 +426,7 @@ const styles = StyleSheet.create({
   content: { padding: 12, gap: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   countdownRow: { flexDirection: "row", alignItems: "center" },
+  quotePriceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4 },
   wonCard: { backgroundColor: "#D4EDDA", borderColor: "#c3e6cb", borderWidth: 1 },
   closedCard: { backgroundColor: COLORS.offwhite },
 });

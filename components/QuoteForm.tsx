@@ -19,9 +19,10 @@ type Condition = (typeof CONDITION_OPTIONS)[number];
 const PHOTO_WINDOW_SECONDS = 90;
 const SLIDE_THRESHOLD = 0.7; // 70% of track width to confirm
 
+export type PriceEntry = { condition: Condition; priceGhs: number };
+
 export type QuotePayload = {
-  priceGhs: number;
-  availability: Condition;
+  prices: PriceEntry[];
   photos: string[];
   location?: { latitude: number; longitude: number };
 };
@@ -31,7 +32,7 @@ type Props = {
   feePaid?: boolean;
   partName?: string;
   onSubmit: (payload: QuotePayload) => Promise<void>;
-  initialValues?: { priceGhs: number; availability: string; photos?: string[] };
+  initialValues?: { priceGhs: number; availability: string; photos?: string[]; prices?: PriceEntry[] };
   submitLabel?: string;
 };
 
@@ -88,12 +89,20 @@ export function QuoteForm({
   initialValues,
   submitLabel,
 }: Props): React.JSX.Element {
-  const [price, setPrice] = useState(initialValues?.priceGhs != null ? String(initialValues.priceGhs) : "");
-  const [condition, setCondition] = useState<Condition>(
-    CONDITION_OPTIONS.includes(initialValues?.availability as Condition)
+  // Per-condition prices: { "Brand New": "250", "Home Used": "" }
+  const initPrices = (): Record<Condition, string> => {
+    if (initialValues?.prices && initialValues.prices.length > 0) {
+      const map: Record<Condition, string> = { "Brand New": "", "Home Used": "" };
+      initialValues.prices.forEach((p) => { map[p.condition] = String(p.priceGhs); });
+      return map;
+    }
+    // Legacy single value
+    const cond = CONDITION_OPTIONS.includes(initialValues?.availability as Condition)
       ? (initialValues!.availability as Condition)
-      : "Brand New",
-  );
+      : "Brand New";
+    return { "Brand New": cond === "Brand New" ? String(initialValues?.priceGhs ?? "") : "", "Home Used": cond === "Home Used" ? String(initialValues?.priceGhs ?? "") : "" };
+  };
+  const [prices, setPrices] = useState<Record<Condition, string>>(initPrices);
   const [confirmed, setConfirmed] = useState(!!initialValues?.photos?.[0]);
   const [secondsLeft, setSecondsLeft] = useState(PHOTO_WINDOW_SECONDS);
   const [expired, setExpired] = useState(false);
@@ -184,14 +193,15 @@ export function QuoteForm({
   }
 
   async function submit() {
-    const priceNum = parseInt(price, 10);
-    if (!priceNum || priceNum <= 0) { Alert.alert("Enter a valid price in GHS"); return; }
+    const priceEntries: PriceEntry[] = CONDITION_OPTIONS
+      .map((c) => ({ condition: c, priceGhs: parseInt(prices[c], 10) }))
+      .filter((e) => e.priceGhs > 0);
+    if (priceEntries.length === 0) { Alert.alert("Enter at least one price"); return; }
     if (feePaid && !photoUrl) { Alert.alert("Photo required", "Slide to confirm you have the part and take a photo."); return; }
     setSubmitting(true);
     try {
       await onSubmit({
-        priceGhs: priceNum,
-        availability: condition,
+        prices: priceEntries,
         photos: photoUrl ? [photoUrl] : [],
         ...(location ? { location } : {}),
       });
@@ -204,36 +214,25 @@ export function QuoteForm({
 
   return (
     <View>
-      <ReusableText text="Price (GHS)" family="medium" size={SIZES.small} color={COLORS.secondary} />
-      <HeightSpacer height={6} />
-      <TextInput
-        style={styles.input}
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="number-pad"
-        placeholder="e.g. 250"
-        placeholderTextColor={COLORS.gray2}
-      />
-
-      <HeightSpacer height={12} />
-      <ReusableText text="Condition" family="medium" size={SIZES.small} color={COLORS.secondary} />
-      <HeightSpacer height={6} />
-      <View style={styles.conditionRow}>
-        {CONDITION_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt}
-            style={[styles.conditionOption, condition === opt && styles.conditionActive]}
-            onPress={() => setCondition(opt)}
-          >
-            <ReusableText
-              text={opt}
-              family={condition === opt ? "medium" : "regular"}
-              size={SIZES.small}
-              color={condition === opt ? COLORS.primary : COLORS.gray2}
-            />
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ReusableText text="Your prices (GHS)" family="medium" size={SIZES.small} color={COLORS.secondary} />
+      <HeightSpacer height={4} />
+      <ReusableText text="Fill in a price for each condition you have available." family="regular" size={11} color={COLORS.gray2} />
+      <HeightSpacer height={10} />
+      {CONDITION_OPTIONS.map((opt) => (
+        <View key={opt} style={styles.conditionPriceRow}>
+          <View style={styles.conditionLabel}>
+            <ReusableText text={opt} family="medium" size={SIZES.small} color={COLORS.secondary} />
+          </View>
+          <TextInput
+            style={[styles.input, styles.conditionPriceInput, !prices[opt] && styles.inputEmpty]}
+            value={prices[opt]}
+            onChangeText={(v) => setPrices((prev) => ({ ...prev, [opt]: v }))}
+            keyboardType="number-pad"
+            placeholder="Leave blank if N/A"
+            placeholderTextColor={COLORS.gray2}
+          />
+        </View>
+      ))}
 
       {feePaid && (
         <>
@@ -355,17 +354,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     fontFamily: "regular",
   },
-  conditionRow: { flexDirection: "row", gap: 10 },
-  conditionOption: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.gray,
-    alignItems: "center",
-    backgroundColor: COLORS.white,
-  },
-  conditionActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary1 },
+  conditionPriceRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  conditionLabel: { width: 90 },
+  conditionPriceInput: { flex: 1, marginBottom: 0 },
+  inputEmpty: { borderColor: COLORS.gray },
   proofRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   locationRow: { flexDirection: "row", alignItems: "center" },
   verifyRow: { flexDirection: "row", alignItems: "flex-start" },
