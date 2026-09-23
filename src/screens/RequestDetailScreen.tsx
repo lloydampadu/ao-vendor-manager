@@ -286,7 +286,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
         <Card>
           <ReusableText text="Submit Your Quote" family="bold" size={16} color={COLORS.secondary} />
           <HeightSpacer height={12} />
-          <QuoteForm assignmentId={row.id} feePaid={row.fee_paid === 1} onSubmit={(payload) => submitQuote(payload)} />
+          <QuoteForm assignmentId={row.id} feePaid={true} partName={req.partName} onSubmit={(payload) => submitQuote(payload)} />
           <HeightSpacer height={8} />
           <ReusableBtn
             onPress={decline}
@@ -312,12 +312,6 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <ReusableText text={`GHS ${quote.priceGhs}`} family="bold" size={20} color={COLORS.primary} />
           <HeightSpacer height={4} />
           <ReusableText text={quote.availability} family="regular" size={SIZES.medium} color={COLORS.gray2} />
-          {quote.refPriceGhs != null && (
-            <>
-              <HeightSpacer height={4} />
-              <ReusableText text={`Ref: GHS ${quote.refPriceGhs}`} family="regular" size={SIZES.medium} color={COLORS.gray2} />
-            </>
-          )}
           <HeightSpacer height={12} />
           <ReusableBtn
             onPress={() => setEditingQuote(true)}
@@ -353,7 +347,8 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
           <HeightSpacer height={12} />
           <QuoteForm
             assignmentId={row.id}
-            feePaid={row.fee_paid === 1}
+            feePaid={true}
+            partName={req.partName}
             initialValues={quote ?? undefined}
             onSubmit={(payload) => updateQuote(payload)}
             submitLabel="Save Changes"
