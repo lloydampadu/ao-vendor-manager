@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { AppState, FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -16,6 +16,9 @@ type Props = {
 const SEGMENTS = ["PENDING", "QUOTED", "DECLINED"] as const;
 type Segment = (typeof SEGMENTS)[number];
 
+// Persists across remounts so we never show the skeleton on a refresh or tab return
+const segmentLoaded: Partial<Record<Segment, boolean>> = {};
+
 type RequestData = {
   partName: string;
   make?: string | null;
@@ -28,37 +31,68 @@ type RequestData = {
 export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [segment, setSegment] = useState<Segment>("PENDING");
-  const { isSyncing, startSync } = useSyncStore();
-  const loadedSegments = useRef(new Set<Segment>());
+  const [loading, setLoading] = useState(() => !segmentLoaded["PENDING"]);
+  const [refreshing, setRefreshing] = useState(false);
+  const { startSync } = useSyncStore();
   const isFocused = useIsFocused();
+  // Fingerprint per segment — skip re-render when data is unchanged
+  const lastFpRef = useRef<Partial<Record<Segment, string>>>({});
 
-  const load = useCallback(async () => {
-    if (!loadedSegments.current.has(segment)) {
+  const load = useCallback(async (silent = false) => {
+    if (!silent && !segmentLoaded[segment]) {
       setLoading(true);
     }
     await initDb();
     const rows = await getAssignments(segment);
-    setAssignments(rows);
-    loadedSegments.current.add(segment);
+    const fp = rows.map((a) => `${a.id}:${a.status}:${a.updated_at}`).join("|");
+    if (fp !== lastFpRef.current[segment]) {
+      lastFpRef.current[segment] = fp;
+      setAssignments(rows);
+    }
+    segmentLoaded[segment] = true;
     setLoading(false);
   }, [segment]);
 
   useEffect(() => { void load(); }, [load]);
 
+  // Sync when nav screen gains focus (tab switch, back navigation)
   useEffect(() => {
     if (!isFocused) return;
-    startSync().then(() => load()).catch(() => {});
+    startSync().then(() => load(true)).catch(() => {});
   }, [isFocused]);
+
+  // Sync when app comes back to foreground (covers 2-phone same-account scenario)
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && isFocused) {
+        startSync().then(() => load(true)).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [isFocused, startSync, load]);
+
+  // Poll every 30s while the screen is focused so two phones stay in sync
+  useEffect(() => {
+    if (!isFocused) return;
+    const id = setInterval(() => {
+      startSync().then(() => load(true)).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [isFocused, startSync, load]);
 
   useEffect(() => {
     void Notifications.setBadgeCountAsync(0);
   }, []);
 
   const onRefresh = useCallback(async () => {
-    await startSync();
-    await load();
+    setRefreshing(true);
+    try {
+      await startSync();
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [startSync, load]);
 
   const handleCardPress = useCallback(
@@ -95,7 +129,7 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl
-            refreshing={isSyncing}
+            refreshing={refreshing}
             onRefresh={() => void onRefresh()}
             tintColor={C.primary}
           />
