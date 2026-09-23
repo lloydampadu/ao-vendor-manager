@@ -46,6 +46,11 @@ function SlideToConfirm({ onConfirmed }: { onConfirmed: () => void }) {
 
   const pan = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
+    onStartShouldSetPanResponderCapture: () => true,
+    // Capture horizontal moves before iOS swipe-back navigation can steal them.
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
+    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
+    onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_, g) => {
       const clamped = Math.max(0, Math.min(g.dx, MAX_SLIDE));
       x.setValue(clamped);
