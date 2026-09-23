@@ -9,6 +9,7 @@ import {
   enqueueQuote,
   enqueueDecline,
   updateAssignmentStatus,
+  updateAssignmentQuote,
   getQuoteQueueItem,
   type Assignment,
   type QuoteQueueItem,
@@ -137,6 +138,8 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       created_at: new Date().toISOString(),
     };
     await enqueueQuote(item);
+    // Write quote into local DB immediately so the screen shows it while offline.
+    await updateAssignmentQuote(row.id, JSON.stringify(payload));
     await load();
     setEditingQuote(false);
     startSync().catch(() => {});

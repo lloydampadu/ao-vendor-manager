@@ -189,6 +189,14 @@ export async function updateAssignmentStatus(id: string, status: string): Promis
   await db.runAsync(`UPDATE assignments SET status = ? WHERE id = ?`, [status, id]);
 }
 
+export async function updateAssignmentQuote(id: string, quoteData: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE assignments SET status = 'QUOTED', quote_data = ? WHERE id = ?`,
+    [quoteData, id],
+  );
+}
+
 export async function cacheProducts(products: unknown[]): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
