@@ -30,6 +30,7 @@ import {
   SyncStatusIcon,
   RequestDetailSkeleton,
 } from "../../components";
+import type { QuotePayload, PriceEntry } from "../../components/QuoteForm";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
 
@@ -52,7 +53,7 @@ type RequestData = {
 type QuoteData = {
   priceGhs: number;
   availability: string;
-  prices?: { condition: string; priceGhs: number }[];
+  prices?: PriceEntry[];
   photos?: string[];
 };
 
@@ -128,7 +129,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
     .filter((v): v is string => Boolean(v))
     .join(" ");
 
-  async function submitQuote(payload: { priceGhs: number; availability: string; notes?: string; photos: string[] }) {
+  async function submitQuote(payload: QuotePayload) {
     if (!row) return;
     const item: QuoteQueueItem = {
       id: makeId(),
@@ -149,7 +150,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
     ]);
   }
 
-  async function updateQuote(payload: { priceGhs: number; availability: string; notes?: string; photos: string[] }) {
+  async function updateQuote(payload: QuotePayload) {
     if (!row) return;
     try {
       await api.put(`/vendor/requests/${row.id}/quote`, payload);

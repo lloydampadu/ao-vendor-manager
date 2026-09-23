@@ -13,7 +13,7 @@ import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
 
 type Props = {
   navigation: CompositeNavigationProp<
-    BottomTabNavigationProp<TabParamList, "MyQuotes">,
+    BottomTabNavigationProp<TabParamList, "Inbox">,
     NativeStackNavigationProp<InboxStackParamList>
   >;
 };
