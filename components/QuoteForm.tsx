@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Alert, ActivityIndicator, View, TextInput, StyleSheet,
-  TouchableOpacity, Animated, PanResponder, Dimensions,
+  TouchableOpacity,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -17,7 +17,6 @@ import { Ionicons } from "@expo/vector-icons";
 const CONDITION_OPTIONS = ["Brand New", "Home Used"] as const;
 type Condition = (typeof CONDITION_OPTIONS)[number];
 const PHOTO_WINDOW_SECONDS = 90;
-const SLIDE_THRESHOLD = 0.7; // 70% of track width to confirm
 
 export type PriceEntry = { condition: Condition; priceGhs: number };
 
@@ -36,49 +35,6 @@ type Props = {
   submitLabel?: string;
 };
 
-// ── Slide-to-confirm component ────────────────────────────────────────────────
-const TRACK_WIDTH = Dimensions.get("window").width - 24 * 2 - 32; // card padding
-const THUMB_SIZE = 48;
-const MAX_SLIDE = TRACK_WIDTH - THUMB_SIZE - 4;
-function SlideToConfirm({ onConfirmed }: { onConfirmed: () => void }) {
-  const x = useRef(new Animated.Value(0)).current;
-  const confirmed = useRef(false);
-
-  const pan = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onStartShouldSetPanResponderCapture: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
-    onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_, g) => {
-      const clamped = Math.max(0, Math.min(g.dx, MAX_SLIDE));
-      x.setValue(clamped);
-    },
-    onPanResponderRelease: (_, g) => {
-      if (confirmed.current) return;
-      const ratio = g.dx / MAX_SLIDE;
-      if (ratio >= SLIDE_THRESHOLD) {
-        confirmed.current = true;
-        Animated.spring(x, { toValue: MAX_SLIDE, useNativeDriver: false }).start();
-        onConfirmed();
-      } else {
-        Animated.spring(x, { toValue: 0, useNativeDriver: false }).start();
-      }
-    },
-  });
-
-  const bgOpacity = x.interpolate({ inputRange: [0, MAX_SLIDE], outputRange: [0, 1] });
-
-  return (
-    <View style={slide.track}>
-      <Animated.View style={[StyleSheet.absoluteFill, slide.fill, { opacity: bgOpacity }]} />
-      <ReusableText text="Slide to confirm you have this part →" family="regular" size={12} color={COLORS.gray2} />
-      <Animated.View style={[slide.thumb, { transform: [{ translateX: x }] }]} {...pan.panHandlers}>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
-      </Animated.View>
-    </View>
-  );
-}
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 export function QuoteForm({
@@ -315,13 +271,19 @@ export function QuoteForm({
               <ReusableText text="Do you have this part?" family="medium" size={SIZES.small} color={COLORS.secondary} />
               <HeightSpacer height={4} />
               <ReusableText
-                text="Slide to confirm. You will have 90 seconds to take a photo of the part."
+                text="Tap the button below to confirm. You will have 90 seconds to take a photo."
                 family="regular"
                 size={11}
                 color={COLORS.gray2}
               />
               <HeightSpacer height={12} />
-              <SlideToConfirm onConfirmed={() => { setExpired(false); setConfirmed(true); }} />
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={() => { setExpired(false); setConfirmed(true); }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.white} />
+                <ReusableText text="  Yes, I have this part" family="medium" size={SIZES.small} color={COLORS.white} />
+              </TouchableOpacity>
             </View>
           )}
         </>
@@ -380,32 +342,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     backgroundColor: COLORS.white,
   },
-});
-
-const slide = StyleSheet.create({
-  track: {
-    height: THUMB_SIZE + 4,
-    borderRadius: (THUMB_SIZE + 4) / 2,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary1,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-    position: "relative",
-  },
-  fill: {
-    backgroundColor: COLORS.primary,
-    borderRadius: (THUMB_SIZE + 4) / 2,
-  },
-  thumb: {
-    position: "absolute",
-    left: 2,
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: THUMB_SIZE / 2,
-    backgroundColor: COLORS.primary,
+  confirmBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
   },
 });
