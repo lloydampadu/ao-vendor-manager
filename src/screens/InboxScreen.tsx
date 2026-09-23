@@ -42,15 +42,6 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   // Prevent focus effect from racing the initial load on first mount
   const firstFocusRef = useRef(true);
 
-  // Synchronously show skeleton when switching to an unvisited segment,
-  // before the async load even starts, so stale data never flashes
-  useEffect(() => {
-    if (!segmentLoaded[segment]) {
-      setLoading(true);
-      setAssignments([]);
-    }
-  }, [segment]);
-
   const load = useCallback(async (silent = false) => {
     if (!silent && !segmentLoaded[segment]) {
       setLoading(true);
@@ -127,7 +118,13 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
           <TouchableOpacity
             key={s}
             style={[styles.seg, segment === s && [styles.segActive, { borderBottomColor: C.primary }]]}
-            onPress={() => setSegment(s)}
+            onPress={() => {
+                setSegment(s);
+                if (!segmentLoaded[s]) {
+                  setLoading(true);
+                  setAssignments([]);
+                }
+              }}
           >
             <ReusableText
               text={s}
