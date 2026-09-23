@@ -66,8 +66,8 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
     segmentLoaded[seg] = true;
   }, []);
 
-  // Load whenever the active segment changes
-  useEffect(() => { void load(segment); }, [segment, load]);
+  // Pre-load all segments in parallel on mount so tab switches are instant
+  useEffect(() => { void Promise.all(SEGMENTS.map((seg) => load(seg))); }, [load]);
 
   // Sync on focus — skip the very first mount (load() above handles it)
   useEffect(() => {
