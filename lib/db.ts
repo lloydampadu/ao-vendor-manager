@@ -111,6 +111,29 @@ export async function initDb(): Promise<void> {
       error TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS tyre_listings (
+      id TEXT PRIMARY KEY,
+      server_id TEXT,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      diameter INTEGER NOT NULL,
+      brand TEXT NOT NULL,
+      model TEXT NOT NULL,
+      condition TEXT NOT NULL,
+      price_ghs INTEGER NOT NULL,
+      photos TEXT NOT NULL DEFAULT '[]',
+      in_stock INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS tyre_listing_queue (
+      id TEXT PRIMARY KEY,
+      op TEXT NOT NULL,
+      listing_id TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      synced INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -324,4 +347,88 @@ export async function markStageSynced(id: string): Promise<void> {
 export async function markStageError(id: string, error: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE stage_queue SET error = ? WHERE id = ?`, [error, id]);
+}
+
+// ─── Tyre listings cache + write queue ───────────────────────────────────────
+
+export type TyreListing = {
+  id: string;
+  server_id: string | null; // null until synced to API
+  width: number;
+  height: number;
+  diameter: number;
+  brand: string;
+  model: string;
+  condition: string;
+  price_ghs: number;
+  photos: string; // JSON string[]
+  in_stock: number; // 0 or 1
+  updated_at: string;
+};
+
+export type TyreListingQueueItem = {
+  id: string;
+  op: string; // "create" | "update" | "delete"
+  listing_id: string;
+  payload: string; // JSON blob
+  synced: number; // 0 or 1
+  error: string | null;
+  created_at: string;
+};
+
+export async function upsertTyreListing(t: TyreListing): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO tyre_listings (id, server_id, width, height, diameter, brand, model, condition, price_ghs, photos, in_stock, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       server_id = excluded.server_id,
+       width = excluded.width,
+       height = excluded.height,
+       diameter = excluded.diameter,
+       brand = excluded.brand,
+       model = excluded.model,
+       condition = excluded.condition,
+       price_ghs = excluded.price_ghs,
+       photos = excluded.photos,
+       in_stock = excluded.in_stock,
+       updated_at = excluded.updated_at`,
+    [t.id, t.server_id, t.width, t.height, t.diameter, t.brand, t.model, t.condition, t.price_ghs, t.photos, t.in_stock, t.updated_at],
+  );
+}
+
+export async function getTyreListings(): Promise<TyreListing[]> {
+  const db = await getDb();
+  return db.getAllAsync<TyreListing>(`SELECT * FROM tyre_listings ORDER BY updated_at DESC`);
+}
+
+export async function deleteTyreListing(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM tyre_listings WHERE id = ?`, [id]);
+}
+
+export async function enqueueTyreListing(q: TyreListingQueueItem): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO tyre_listing_queue (id, op, listing_id, payload, synced, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [q.id, q.op, q.listing_id, q.payload, q.synced, q.error, q.created_at],
+  );
+}
+
+export async function getPendingTyreListings(): Promise<TyreListingQueueItem[]> {
+  const db = await getDb();
+  return db.getAllAsync<TyreListingQueueItem>(
+    `SELECT * FROM tyre_listing_queue WHERE synced = 0 ORDER BY created_at ASC`,
+  );
+}
+
+export async function markTyreListingSynced(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE tyre_listing_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+}
+
+export async function markTyreListingError(id: string, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE tyre_listing_queue SET error = ? WHERE id = ?`, [error, id]);
 }
