@@ -9,6 +9,10 @@ import {
   markDeclineSynced,
   markDeclineError,
   deleteAssignment,
+  upsertOrder,
+  getPendingStages,
+  markStageSynced,
+  markStageError,
   type Assignment,
 } from "./db";
 
@@ -20,6 +24,16 @@ type ApiAssignment = {
   updatedAt: string;
   request: { status?: string; [key: string]: unknown };
   quote: object | null;
+};
+
+type ApiOrder = {
+  id: string;
+  fulfillmentStage: string;
+  handedOverAt: string | null;
+  handoverPhotos: string[];
+  request: unknown;
+  wonItems: { partName: string; condition: string; earnGhs: number }[];
+  totalEarnGhs: number;
 };
 
 function mapRow(a: ApiAssignment): Assignment {
@@ -134,10 +148,69 @@ export async function pushPendingDeclines(): Promise<void> {
   }
 }
 
+export async function pushPendingStages(): Promise<void> {
+  const queue = await getPendingStages();
+  console.log(`[sync] pushPendingStages: ${queue.length} queued`, queue.map((q) => `${q.order_id.slice(-6)} err=${q.error ?? "none"}`));
+
+  for (const item of queue) {
+    try {
+      const photos = JSON.parse(item.photos) as string[];
+      const location = item.location ? JSON.parse(item.location) : undefined;
+      console.log(`[sync] posting stage for ${item.order_id.slice(-6)}`);
+      await api.post(`/vendor/orders/${item.order_id}/stage`, {
+        stage: item.stage,
+        ...(photos.length ? { photos } : {}),
+        ...(location ? { location } : {}),
+      });
+      await markStageSynced(item.id);
+      console.log(`[sync] stage synced for ${item.order_id.slice(-6)}`);
+    } catch (err) {
+      const e = err as { status?: number; message?: string };
+      console.error(`[sync] stage push FAILED for ${item.order_id.slice(-6)}: ${e.status} ${e.message}`);
+      if (e.status === 404 || e.status === 409) {
+        // 404 = gone; 409 = backward/not-won — stop retrying.
+        await markStageSynced(item.id);
+        await markStageError(item.id, e.status === 404 ? "not found" : "conflict");
+      } else {
+        await markStageError(item.id, e.message ?? "unknown error");
+      }
+    }
+  }
+}
+
+export async function pullOrders(): Promise<void> {
+  console.log("[sync] pullOrders: fetching /vendor/orders");
+  let orders: ApiOrder[];
+  try {
+    const res = await api.get<{ orders: ApiOrder[] }>("/vendor/orders");
+    orders = res.orders;
+  } catch (err) {
+    console.warn("[sync] pullOrders failed:", err);
+    return;
+  }
+  console.log(`[sync] server returned ${orders.length} orders`, orders.map((o) => `${o.id.slice(-6)} ${o.fulfillmentStage}`));
+
+  for (const o of orders) {
+    await upsertOrder({
+      id: o.id,
+      stage: o.fulfillmentStage,
+      won_items: JSON.stringify(o.wonItems),
+      total_earn_ghs: o.totalEarnGhs,
+      request_data: JSON.stringify(o.request),
+      handed_over_at: o.handedOverAt,
+      handover_photos: JSON.stringify(o.handoverPhotos),
+      updated_at: new Date().toISOString(),
+    });
+  }
+  console.log("[sync] pullOrders done");
+}
+
 export async function sync(): Promise<void> {
   console.log("[sync] ---- sync started ---- API:", process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000");
   await pullAssignments();
   await pushPendingQuotes();
   await pushPendingDeclines();
+  await pushPendingStages();
+  await pullOrders();
   console.log("[sync] ---- sync complete ----");
 }
