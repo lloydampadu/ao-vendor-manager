@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Alert, ActivityIndicator, View, TextInput, StyleSheet,
+  Alert, ActivityIndicator, ScrollView, View, TextInput, StyleSheet,
   TouchableOpacity,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -9,19 +9,22 @@ import ReusableText from "./Reusable/ReusableText";
 import ReusableBtn from "./Reusable/ReusableBtn";
 import NetworkImage from "./Reusable/NetworkImage";
 import HeightSpacer from "./Reusable/HeightSpacer";
-import { COLORS, SIZES, useThemeColors } from "../constants/theme";
+import { SIZES, useThemeColors } from "../constants/theme";
 import { uploadImage } from "../lib/upload";
-import { api } from "../lib/api";
 import { Ionicons } from "@expo/vector-icons";
 
 const CONDITION_OPTIONS = ["Brand New", "Home Used"] as const;
 type Condition = (typeof CONDITION_OPTIONS)[number];
 const PHOTO_WINDOW_SECONDS = 90;
+const MAX_PHOTOS_PER_CONDITION = 4;
 
 export type PriceEntry = { condition: Condition; priceGhs: number };
 
 export type QuotePayload = {
   prices: PriceEntry[];
+  // photos per condition: { "Brand New": [...urls], "Home Used": [...urls] }
+  photosByCondition: Partial<Record<Condition, string[]>>;
+  // flat list for backward compat with existing API/DB fields
   photos: string[];
   location?: { latitude: number; longitude: number };
 };
@@ -35,8 +38,6 @@ type Props = {
   submitLabel?: string;
 };
 
-
-// ── Main form ─────────────────────────────────────────────────────────────────
 export function QuoteForm({
   assignmentId,
   feePaid = false,
@@ -46,66 +47,73 @@ export function QuoteForm({
   submitLabel,
 }: Props): React.JSX.Element {
   const C = useThemeColors();
-  // Per-condition prices: { "Brand New": "250", "Home Used": "" }
+
   const initPrices = (): Record<Condition, string> => {
     if (initialValues?.prices && initialValues.prices.length > 0) {
       const map: Record<Condition, string> = { "Brand New": "", "Home Used": "" };
       initialValues.prices.forEach((p) => { map[p.condition] = String(p.priceGhs); });
       return map;
     }
-    // Legacy single value
     const cond = CONDITION_OPTIONS.includes(initialValues?.availability as Condition)
       ? (initialValues!.availability as Condition)
       : "Brand New";
-    return { "Brand New": cond === "Brand New" ? String(initialValues?.priceGhs ?? "") : "", "Home Used": cond === "Home Used" ? String(initialValues?.priceGhs ?? "") : "" };
+    return {
+      "Brand New": cond === "Brand New" ? String(initialValues?.priceGhs ?? "") : "",
+      "Home Used": cond === "Home Used" ? String(initialValues?.priceGhs ?? "") : "",
+    };
   };
+
   const [prices, setPrices] = useState<Record<Condition, string>>(initPrices);
-  const [confirmed, setConfirmed] = useState(!!initialValues?.photos?.[0]);
-  const [secondsLeft, setSecondsLeft] = useState(PHOTO_WINDOW_SECONDS);
-  const [expired, setExpired] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(initialValues?.photos?.[0] ?? null);
-  const [localUri, setLocalUri] = useState<string | null>(initialValues?.photos?.[0] ?? null);
+
+  // Multiple photos per condition: condition → array of { localUri, uploadedUrl | null }
+  type PhotoEntry = { localUri: string; url: string | null };
+  const [photosByCondition, setPhotosByCondition] = useState<Partial<Record<Condition, PhotoEntry[]>>>({});
+
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<{ match: boolean; reason: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Which condition are we currently shooting for (timer + camera open)
+  const [pendingCondition, setPendingCondition] = useState<Condition | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(PHOTO_WINDOW_SECONDS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Start countdown when vendor confirms they have the part.
+  // Conditions with a filled price
+  const filledConditions = CONDITION_OPTIONS.filter((c) => parseInt(prices[c], 10) > 0);
+
+  // All photos uploaded (no pending null url) and each filled condition has ≥1 photo
+  const allPhotosDone = feePaid
+    ? filledConditions.every((c) => {
+        const entries = photosByCondition[c] ?? [];
+        return entries.length > 0 && entries.every((p) => p.url !== null);
+      })
+    : true;
+
+  const uploadingForCondition = (cond: Condition) =>
+    (photosByCondition[cond] ?? []).some((p) => p.url === null);
+
+  // Start countdown when pendingCondition set
   useEffect(() => {
-    if (!confirmed || photoUrl || expired) return;
+    if (!pendingCondition) return;
     setSecondsLeft(PHOTO_WINDOW_SECONDS);
     timerRef.current = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
           clearInterval(timerRef.current!);
-          setExpired(true);
-          setConfirmed(false);
+          setPendingCondition(null);
           Alert.alert("Too slow", "You didn't take a photo in time. Try again.");
           return PHOTO_WINDOW_SECONDS;
         }
         return s - 1;
       });
     }, 1000);
-    // Open camera immediately
-    void openCamera();
+    void openCamera(pendingCondition);
     return () => clearInterval(timerRef.current!);
-  }, [confirmed]);
+  }, [pendingCondition]);
 
-  // Stop timer once photo is taken.
-  useEffect(() => {
-    if (photoUrl && timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, [photoUrl]);
-
-  async function openCamera() {
+  async function openCamera(forCondition: Condition) {
     const camPerm = await ImagePicker.requestCameraPermissionsAsync();
     if (!camPerm.granted) {
       Alert.alert("Camera needed", "Please allow camera access to continue.");
-      setConfirmed(false);
+      setPendingCondition(null);
       return;
     }
     const locPerm = await Location.requestForegroundPermissionsAsync();
@@ -114,52 +122,95 @@ export function QuoteForm({
       quality: 0.75,
     });
     if (result.canceled) {
-      // They dismissed camera — reset so timer doesn't keep running with no photo
-      setConfirmed(false);
+      setPendingCondition(null);
       clearInterval(timerRef.current!);
       return;
     }
+
+    // Stop timer — photo taken in time
+    clearInterval(timerRef.current!);
+    timerRef.current = null;
+    setPendingCondition(null);
+
     const uri = result.assets[0].uri;
-    setLocalUri(uri);
-    setUploading(true);
-    if (locPerm.granted) {
+    // Add a pending entry (url = null while uploading)
+    setPhotosByCondition((prev) => ({
+      ...prev,
+      [forCondition]: [...(prev[forCondition] ?? []), { localUri: uri, url: null }],
+    }));
+
+    if (locPerm.granted && !location) {
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
         .then((pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
         .catch(() => {});
     }
+
     try {
       const url = await uploadImage(uri);
-      setPhotoUrl(url);
-      // Haiku photo verification — disabled for now
+      setPhotosByCondition((prev) => {
+        const entries = [...(prev[forCondition] ?? [])];
+        let idx = -1;
+        for (let i = entries.length - 1; i >= 0; i--) {
+          if (entries[i].localUri === uri && entries[i].url === null) { idx = i; break; }
+        }
+        if (idx !== -1) entries[idx] = { ...entries[idx], url };
+        return { ...prev, [forCondition]: entries };
+      });
     } catch (e) {
-      setLocalUri(null);
+      // Remove the failed entry
+      setPhotosByCondition((prev) => ({
+        ...prev,
+        [forCondition]: (prev[forCondition] ?? []).filter((e) => !(e.localUri === uri && e.url === null)),
+      }));
       Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
-    } finally {
-      setUploading(false);
     }
   }
 
-  function resetPhoto() {
-    setPhotoUrl(null);
-    setLocalUri(null);
-    setLocation(null);
-    setVerifyResult(null);
-    setVerifying(false);
-    setConfirmed(false);
-    setExpired(false);
+  function removePhoto(condition: Condition, index: number) {
+    setPhotosByCondition((prev) => {
+      const entries = [...(prev[condition] ?? [])];
+      entries.splice(index, 1);
+      return { ...prev, [condition]: entries };
+    });
   }
 
   async function submit() {
     const priceEntries: PriceEntry[] = CONDITION_OPTIONS
       .map((c) => ({ condition: c, priceGhs: parseInt(prices[c], 10) }))
       .filter((e) => e.priceGhs > 0);
-    if (priceEntries.length === 0) { Alert.alert("No price entered", "Please enter a price for at least one condition."); return; }
-    if (feePaid && !photoUrl) { Alert.alert("Photo needed", "Please slide to confirm you have the part, then take a photo."); return; }
+    if (priceEntries.length === 0) {
+      Alert.alert("No price entered", "Please enter a price for at least one condition.");
+      return;
+    }
+    if (feePaid) {
+      // Check all photos are uploaded (no pending null)
+      const stillUploading = priceEntries.some((e) => uploadingForCondition(e.condition));
+      if (stillUploading) { Alert.alert("Please wait", "Photos are still uploading."); return; }
+      const missing = priceEntries.filter((e) => !(photosByCondition[e.condition]?.length));
+      if (missing.length > 0) {
+        Alert.alert(
+          "Photo needed",
+          missing.length > 1
+            ? "Please take at least one photo for each condition."
+            : `Please take at least one photo of the ${missing[0].condition} part.`,
+        );
+        return;
+      }
+    }
     setSubmitting(true);
     try {
+      const byCondition: Partial<Record<Condition, string[]>> = {};
+      priceEntries.forEach((e) => {
+        byCondition[e.condition] = (photosByCondition[e.condition] ?? [])
+          .map((p) => p.url)
+          .filter((u): u is string => !!u);
+      });
+      // Flat list — all photos in condition order, for backward compat
+      const flatPhotos = priceEntries.flatMap((e) => byCondition[e.condition] ?? []);
       await onSubmit({
         prices: priceEntries,
-        photos: photoUrl ? [photoUrl] : [],
+        photosByCondition: byCondition,
+        photos: flatPhotos,
         ...(location ? { location } : {}),
       });
     } finally {
@@ -173,8 +224,14 @@ export function QuoteForm({
     <View>
       <ReusableText text="Your price (GHS)" family="medium" size={SIZES.small} color={C.secondary} />
       <HeightSpacer height={4} />
-      <ReusableText text="Enter a price for each type you have. Leave blank if you don't have it." family="regular" size={11} color={C.gray2} />
+      <ReusableText
+        text="Enter a price for each type you have. Leave blank if you don't have it."
+        family="regular"
+        size={11}
+        color={C.gray2}
+      />
       <HeightSpacer height={10} />
+
       {CONDITION_OPTIONS.map((opt) => (
         <View key={opt} style={styles.conditionPriceRow}>
           <View style={styles.conditionLabel}>
@@ -191,99 +248,117 @@ export function QuoteForm({
         </View>
       ))}
 
-      {feePaid && (
+      {feePaid && filledConditions.length > 0 && (
         <>
           <HeightSpacer height={20} />
 
-          {/* Photo already taken */}
-          {photoUrl ? (
-            <View>
-              <View style={styles.proofRow}>
-                <NetworkImage source={localUri!} width={80} height={80} radius={8} />
-                <View style={{ flex: 1 }}>
-                  <ReusableText text="✓ Photo taken" family="medium" size={SIZES.small} color="#16a34a" />
-                  {location && (
-                    <>
-                      <HeightSpacer height={4} />
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location" size={11} color={C.gray2} />
-                        <ReusableText
-                          text={`  ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
-                          family="regular"
-                          size={11}
-                          color={C.gray2}
-                        />
-                      </View>
-                    </>
-                  )}
-                  {(verifying || verifyResult) && <HeightSpacer height={8} />}
-                  {verifying && (
-                    <View style={styles.verifyRow}>
-                      <ActivityIndicator size="small" color={C.gray2} />
-                      <ReusableText text="  Checking photo…" family="regular" size={11} color={C.gray2} />
-                    </View>
-                  )}
-                  {!verifying && verifyResult && (
-                    <View style={styles.verifyRow}>
-                      <Ionicons
-                        name={verifyResult.match ? "checkmark-circle" : "warning"}
-                        size={14}
-                        color={verifyResult.match ? "#16a34a" : "#d97706"}
-                      />
-                      <ReusableText
-                        text={`  ${verifyResult.reason}`}
-                        family="regular"
-                        size={11}
-                        color={verifyResult.match ? "#16a34a" : "#d97706"}
-                      />
-                    </View>
-                  )}
-                  <HeightSpacer height={8} />
-                  <TouchableOpacity onPress={resetPhoto}>
-                    <ReusableText text="Take again" family="regular" size={11} color={C.primary} />
-                  </TouchableOpacity>
+          {filledConditions.map((cond) => {
+            const entries = photosByCondition[cond] ?? [];
+            const hasPhotos = entries.length > 0;
+            const canAddMore = entries.length < MAX_PHOTOS_PER_CONDITION;
+            const isThisPending = pendingCondition === cond;
+            const isUploading = uploadingForCondition(cond);
+
+            return (
+              <View key={cond} style={[styles.conditionPhotoBlock, { borderColor: C.gray, backgroundColor: C.white }]}>
+                {/* Header row */}
+                <View style={styles.conditionPhotoHeader}>
+                  <View style={styles.conditionBadge}>
+                    <Ionicons
+                      name={cond === "Brand New" ? "sparkles-outline" : "refresh-outline"}
+                      size={14}
+                      color={C.primary}
+                    />
+                    <ReusableText text={`  ${cond}`} family="bold" size={SIZES.small} color={C.primary} />
+                  </View>
+                  <ReusableText
+                    text={`${entries.filter((e) => e.url).length}/${MAX_PHOTOS_PER_CONDITION} photos`}
+                    family="regular"
+                    size={11}
+                    color={C.gray2}
+                  />
                 </View>
-                {uploading && <ActivityIndicator color={C.primary} />}
+
+                {/* Countdown box when shooting for this condition */}
+                {isThisPending && (
+                  <View style={[styles.countdownBox, { borderColor: C.primary, backgroundColor: C.primary1 }]}>
+                    <ReusableText text="Take the photo now!" family="bold" size={14} color={timerColor} />
+                    <HeightSpacer height={4} />
+                    <ReusableText text={`${secondsLeft}s left`} family="medium" size={24} color={timerColor} />
+                    <HeightSpacer height={8} />
+                    <TouchableOpacity
+                      style={[styles.cameraBtn, { borderColor: C.primary, backgroundColor: C.white }]}
+                      onPress={() => void openCamera(cond)}
+                      disabled={isUploading}
+                    >
+                      {isUploading
+                        ? <ActivityIndicator color={C.primary} />
+                        : <><Ionicons name="camera" size={18} color={C.primary} /><ReusableText text="  Open Camera" family="medium" size={12} color={C.primary} /></>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Thumbnail strip */}
+                {hasPhotos && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbStrip}>
+                    {entries.map((entry, i) => (
+                      <View key={entry.localUri} style={styles.thumbWrap}>
+                        <NetworkImage source={entry.localUri} width={72} height={72} radius={8} />
+                        {entry.url === null && (
+                          <View style={styles.thumbUploadingOverlay}>
+                            <ActivityIndicator color="#fff" size="small" />
+                          </View>
+                        )}
+                        <TouchableOpacity
+                          style={styles.thumbRemove}
+                          onPress={() => removePhoto(cond, i)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Ionicons name="close-circle" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+
+                {/* Add photo button */}
+                {!isThisPending && canAddMore && !pendingCondition && (
+                  <TouchableOpacity
+                    style={[styles.addPhotoBtn, { borderColor: C.primary, backgroundColor: C.primary1 }]}
+                    onPress={() => { setPendingCondition(cond); }}
+                    disabled={isUploading}
+                  >
+                    <Ionicons name="camera-outline" size={18} color={C.primary} />
+                    <ReusableText
+                      text={hasPhotos ? "  Add another photo" : "  Take a photo"}
+                      family="medium"
+                      size={SIZES.small}
+                      color={C.primary}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {!canAddMore && (
+                  <ReusableText text="Max 4 photos reached" family="regular" size={11} color={C.gray2} />
+                )}
               </View>
-            </View>
-          ) : confirmed ? (
-            /* Confirmed, camera open / counting down */
-            <View style={[styles.countdownBox, { borderColor: C.primary, backgroundColor: C.primary1 }]}>
-              <ReusableText text="Take the photo now!" family="bold" size={15} color={timerColor} />
-              <HeightSpacer height={6} />
-              <ReusableText
-                text={`${secondsLeft} seconds left`}
-                family="medium"
-                size={28}
-                color={timerColor}
-              />
-              <HeightSpacer height={10} />
-              <TouchableOpacity style={[styles.cameraBtn, { borderColor: C.primary, backgroundColor: C.white }]} onPress={() => void openCamera()} disabled={uploading}>
-                {uploading
-                  ? <ActivityIndicator color={C.primary} />
-                  : <><Ionicons name="camera" size={22} color={C.primary} /><ReusableText text="Open Camera" family="medium" size={12} color={C.primary} /></>
-                }
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View>
-              <ReusableText text="Do you have this part?" family="medium" size={SIZES.small} color={C.secondary} />
+            );
+          })}
+
+          {location && allPhotosDone && (
+            <>
               <HeightSpacer height={4} />
-              <ReusableText
-                text="Tap the button below to confirm. You will have 90 seconds to take a photo."
-                family="regular"
-                size={11}
-                color={C.gray2}
-              />
-              <HeightSpacer height={12} />
-              <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: C.primary }]}
-                onPress={() => { setExpired(false); setConfirmed(true); }}
-              >
-                <Ionicons name="checkmark-circle-outline" size={20} color={C.white} />
-                <ReusableText text="  Yes, I have this part" family="medium" size={SIZES.small} color={C.white} />
-              </TouchableOpacity>
-            </View>
+              <View style={styles.locationRow}>
+                <Ionicons name="location" size={11} color={C.gray2} />
+                <ReusableText
+                  text={`  ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
+                  family="regular"
+                  size={11}
+                  color={C.gray2}
+                />
+              </View>
+            </>
           )}
         </>
       )}
@@ -314,30 +389,61 @@ const styles = StyleSheet.create({
   },
   conditionPriceRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   conditionLabel: { width: 90 },
-  conditionPriceInput: { flex: 1, marginBottom: 0 },
-  proofRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  locationRow: { flexDirection: "row", alignItems: "center" },
-  verifyRow: { flexDirection: "row", alignItems: "flex-start" },
+  conditionPriceInput: { flex: 1 },
+  conditionPhotoBlock: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    gap: 10,
+  },
+  conditionPhotoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  conditionBadge: { flexDirection: "row", alignItems: "center" },
+  thumbStrip: { flexGrow: 0 },
+  thumbWrap: {
+    position: "relative",
+    marginRight: 8,
+  },
+  thumbUploadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbRemove: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+  },
+  addPhotoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+  },
   countdownBox: {
     alignItems: "center",
-    padding: 20,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 10,
     borderWidth: 1.5,
   },
   cameraBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
     borderRadius: 8,
     borderWidth: 1.5,
   },
-  confirmBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
+  locationRow: { flexDirection: "row", alignItems: "center" },
 });

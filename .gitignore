@@ -4,3 +4,4 @@ ios/
 .expo/
 dist/
 .env
+google-services.json

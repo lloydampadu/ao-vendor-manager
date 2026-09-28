@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { saveToken, clearToken, saveVendor, clearVendor } from "@/lib/auth";
 
-export type Vendor = { id: string; name: string; phone: string; categories: string[] };
+export type Vendor = { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] };
 
 type AuthState = {
   vendor: Vendor | null;

@@ -19,7 +19,12 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       await doSync();
       set({ lastSyncAt: new Date() });
     } catch (err) {
-      const e = err as { message?: string };
+      const e = err as { message?: string; status?: number };
+      // Sync is a retrying background poller — a transient blip (502 while the
+      // API restarts on deploy, a dropped connection, a timeout) is expected
+      // and self-heals on the next tick, so warn rather than throw a red error
+      // overlay. The syncError state below still drives the offline banner.
+      console.warn("[sync-store] sync failed (will retry):", e.status, e.message);
       set({ syncError: e.message ?? "sync failed" });
     } finally {
       set({ isSyncing: false });

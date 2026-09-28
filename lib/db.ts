@@ -109,6 +109,11 @@ export async function getAssignment(id: string): Promise<Assignment | null> {
   );
 }
 
+export async function deleteAssignment(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM assignments WHERE id = ?`, [id]);
+}
+
 export async function enqueueQuote(q: QuoteQueueItem): Promise<void> {
   const db = await getDb();
   await db.runAsync(

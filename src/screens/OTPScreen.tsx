@@ -31,7 +31,12 @@ export default function OTPScreen({ route, navigation }: Props): React.JSX.Eleme
       const needsBrands = !vendor.brands || vendor.brands.length === 0;
       const route = needsSpecialties ? 'Onboarding' : needsBrands ? 'OnboardingBrands' : 'Main';
       navigation.reset({ index: 0, routes: [{ name: route }] });
-      registerPushToken().catch(() => {});
+      registerPushToken().catch((e) => {
+        // Surfaced, not swallowed: in Expo Go (SDK 53+) there is no push token,
+        // so this is expected there; on a real build a failure here means the
+        // vendor won't receive new-request notifications.
+        console.warn('[notifications] registerPushToken failed:', e);
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {

@@ -19,7 +19,8 @@ type Props = {
 };
 
 type RequestData = { partName: string; make?: string; model?: string; year?: number };
-type QuoteData  = { priceGhs: number; availability: string; notes?: string };
+type PriceEntry = { condition: string; priceGhs: number };
+type QuoteData  = { priceGhs?: number; availability?: string; prices?: PriceEntry[]; notes?: string };
 
 export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
@@ -93,10 +94,15 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
                 <HeightSpacer height={4} />
                 <View style={styles.quoteRow}>
                   <ReusableText
-                    text={`GHS ${quote.priceGhs} · ${quote.availability}`}
+                    text={
+                      quote.prices && quote.prices.length > 0
+                        ? quote.prices.map((p) => `${p.condition}: GHS ${p.priceGhs}`).join(" · ")
+                        : `GHS ${quote.priceGhs ?? "—"}`
+                    }
                     family="regular"
                     size={SIZES.small}
                     color={C.gray2}
+                    numberOfLines={1}
                   />
                   {syncStatusMap[item.id] != null && (
                     <SyncStatusIcon status={syncStatusMap[item.id]} />

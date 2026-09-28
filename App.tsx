@@ -85,7 +85,7 @@ export default function App(): React.JSX.Element {
         setTimeout(() => {
           (navRef.current?.navigate as (name: string, params: Record<string, string>) => void)?.(
             'RequestDetail',
-            { requestId: assignmentId },
+            { assignmentId },
           );
         }, 100);
       }

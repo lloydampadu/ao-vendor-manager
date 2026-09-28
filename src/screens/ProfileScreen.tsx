@@ -39,7 +39,7 @@ export default function ProfileScreen(): React.JSX.Element {
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: C.offwhite }]}>
+    <SafeAreaView edges={["bottom"]} style={[styles.safe, { backgroundColor: C.offwhite }]}>
       <View style={styles.container}>
         <Card>
           <ReusableText text={vendor?.name ?? "Vendor"} family="bold" size={18} color={C.secondary} />

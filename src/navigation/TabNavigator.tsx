@@ -69,6 +69,11 @@ export default function TabNavigator(): React.JSX.Element {
         name="Profile"
         component={ProfileScreen}
         options={{
+          title: 'Profile',
+          headerShown: true,
+          headerStyle: { backgroundColor: C.white },
+          headerTintColor: C.black,
+          headerTitleStyle: { color: C.black },
           tabBarIcon: ({ focused, color }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
           ),
