@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, tyreListingsApi } from "./api";
 import {
   upsertAssignment,
   getAssignments,
@@ -14,6 +14,11 @@ import {
   markStageSynced,
   markStageError,
   applyLocalStage,
+  upsertTyreListing,
+  getPendingTyreListings,
+  markTyreListingSynced,
+  markTyreListingError,
+  deleteTyreListing,
   type Assignment,
 } from "./db";
 import { uploadImage } from "./upload";
@@ -242,6 +247,135 @@ export async function pullOrders(): Promise<void> {
   console.log("[sync] pullOrders done");
 }
 
+export async function pushPendingTyreListings(): Promise<void> {
+  const queue = await getPendingTyreListings();
+  console.log(`[sync] pushPendingTyreListings: ${queue.length} queued`, queue.map((q) => `${q.listing_id.slice(-6)} op=${q.op} err=${q.error ?? "none"}`));
+
+  for (const item of queue) {
+    // Guard against malformed queue rows that would otherwise retry forever.
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(item.payload) as Record<string, unknown>;
+    } catch (parseErr) {
+      console.error(`[sync] bad payload for tyre listing queue item ${item.id} — dropping`, parseErr);
+      await markTyreListingSynced(item.id);
+      await markTyreListingError(item.id, "bad payload");
+      continue;
+    }
+
+    try {
+      if (item.op === "create") {
+        // Upload any local photo URIs before POSTing — mirrors pushPendingStages photo upload-at-flush.
+        const rawPhotos = Array.isArray(payload.photos) ? (payload.photos as string[]) : [];
+        const uploadedPhotos: string[] = [];
+        for (const uri of rawPhotos) {
+          if (uri.startsWith("http")) {
+            uploadedPhotos.push(uri);
+          } else {
+            console.log(`[sync] uploading local tyre photo for listing ${item.listing_id.slice(-6)}`);
+            const remoteUrl = await uploadImage(uri);
+            uploadedPhotos.push(remoteUrl);
+          }
+        }
+        const body = { ...payload, ...(uploadedPhotos.length ? { photos: uploadedPhotos } : {}) };
+        console.log(`[sync] creating tyre listing for ${item.listing_id.slice(-6)}`);
+        const { listing } = await tyreListingsApi.create(body);
+        // Update local record with the server-assigned id.
+        await upsertTyreListing({
+          id: item.listing_id,
+          server_id: listing.id,
+          width: listing.width,
+          height: listing.height,
+          diameter: listing.diameter,
+          brand: listing.brand,
+          model: listing.model,
+          condition: listing.condition,
+          price_ghs: listing.priceGhs,
+          photos: JSON.stringify(listing.photos),
+          in_stock: listing.inStock ? 1 : 0,
+          updated_at: listing.updatedAt,
+        });
+        await markTyreListingSynced(item.id);
+        console.log(`[sync] tyre listing created for ${item.listing_id.slice(-6)}, server_id=${listing.id.slice(-6)}`);
+      } else if (item.op === "update") {
+        // Upload any local photo URIs before PATCHing.
+        const rawPhotos = Array.isArray(payload.photos) ? (payload.photos as string[]) : [];
+        const uploadedPhotos: string[] = [];
+        for (const uri of rawPhotos) {
+          if (uri.startsWith("http")) {
+            uploadedPhotos.push(uri);
+          } else {
+            console.log(`[sync] uploading local tyre photo for listing ${item.listing_id.slice(-6)}`);
+            const remoteUrl = await uploadImage(uri);
+            uploadedPhotos.push(remoteUrl);
+          }
+        }
+        const serverId = typeof payload.server_id === "string" ? payload.server_id : item.listing_id;
+        const body = { ...payload, ...(rawPhotos.length ? { photos: uploadedPhotos } : {}) };
+        console.log(`[sync] updating tyre listing ${serverId.slice(-6)}`);
+        await tyreListingsApi.update(serverId, body);
+        await markTyreListingSynced(item.id);
+        console.log(`[sync] tyre listing updated for ${item.listing_id.slice(-6)}`);
+      } else if (item.op === "delete") {
+        const serverId = typeof payload.server_id === "string" ? payload.server_id : item.listing_id;
+        console.log(`[sync] deleting tyre listing ${serverId.slice(-6)}`);
+        await tyreListingsApi.delete(serverId);
+        await deleteTyreListing(item.listing_id);
+        await markTyreListingSynced(item.id);
+        console.log(`[sync] tyre listing deleted for ${item.listing_id.slice(-6)}`);
+      } else {
+        // Unknown op — drop it.
+        console.warn(`[sync] unknown tyre listing op "${item.op}" for item ${item.id} — dropping`);
+        await markTyreListingSynced(item.id);
+        await markTyreListingError(item.id, `unknown op: ${item.op}`);
+      }
+    } catch (err) {
+      const e = err as { status?: number; message?: string };
+      console.error(`[sync] tyre listing push FAILED for ${item.listing_id.slice(-6)}: ${e.status} ${e.message}`);
+      if (e.status === 404 || e.status === 409) {
+        // 404 = gone; 409 = conflict — stop retrying.
+        await markTyreListingSynced(item.id);
+        await markTyreListingError(item.id, e.status === 404 ? "not found" : "conflict");
+      } else {
+        // Upload failure (still offline) or transient error — leave synced=0 for retry.
+        await markTyreListingError(item.id, e.message ?? "unknown error");
+      }
+    }
+  }
+}
+
+export async function pullTyreListings(): Promise<void> {
+  console.log("[sync] pullTyreListings: fetching /vendor/tyre-listings");
+  let listings: import("./api").ApiTyreListing[];
+  try {
+    const res = await tyreListingsApi.getAll();
+    listings = res.listings;
+  } catch (err) {
+    console.warn("[sync] pullTyreListings failed:", err);
+    return;
+  }
+  console.log(`[sync] server returned ${listings.length} tyre listings`);
+
+  for (const l of listings) {
+    await upsertTyreListing({
+      id: l.id,
+      server_id: l.id,
+      width: l.width,
+      height: l.height,
+      diameter: l.diameter,
+      brand: l.brand,
+      model: l.model,
+      condition: l.condition,
+      price_ghs: l.priceGhs,
+      photos: JSON.stringify(l.photos),
+      in_stock: l.inStock ? 1 : 0,
+      updated_at: l.updatedAt,
+    });
+  }
+
+  console.log("[sync] pullTyreListings done");
+}
+
 export async function sync(): Promise<void> {
   console.log("[sync] ---- sync started ---- API:", process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000");
   await pullAssignments();
@@ -249,5 +383,7 @@ export async function sync(): Promise<void> {
   await pushPendingDeclines();
   await pushPendingStages();
   await pullOrders();
+  await pushPendingTyreListings();
+  await pullTyreListings();
   console.log("[sync] ---- sync complete ----");
 }

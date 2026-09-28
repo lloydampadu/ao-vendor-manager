@@ -45,3 +45,26 @@ export const api = {
   patch: <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+
+// ─── Tyre listings API calls ──────────────────────────────────────────────────
+
+export type ApiTyreListing = {
+  id: string;
+  width: number;
+  height: number;
+  diameter: number;
+  brand: string;
+  model: string;
+  condition: string;
+  priceGhs: number;
+  photos: string[];
+  inStock: boolean;
+  updatedAt: string;
+};
+
+export const tyreListingsApi = {
+  getAll: () => api.get<{ listings: ApiTyreListing[] }>("/vendor/tyre-listings"),
+  create: (body: unknown) => api.post<{ listing: ApiTyreListing }>("/vendor/tyre-listings", body),
+  update: (id: string, body: unknown) => api.patch<{ listing: ApiTyreListing }>(`/vendor/tyre-listings/${id}`, body),
+  delete: (id: string) => api.delete<void>(`/vendor/tyre-listings/${id}`),
+};
