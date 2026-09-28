@@ -78,18 +78,32 @@ export default function App(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    const cleanup = setupNotificationListeners((assignmentId) => {
-      const nav = navRef.current;
-      if (nav?.isReady()) {
-        nav.navigate('Main' as never);
-        setTimeout(() => {
-          (navRef.current?.navigate as (name: string, params: Record<string, string>) => void)?.(
-            'RequestDetail',
-            { assignmentId },
-          );
-        }, 100);
-      }
-    });
+    const cleanup = setupNotificationListeners(
+      (assignmentId) => {
+        const nav = navRef.current;
+        if (nav?.isReady()) {
+          nav.navigate('Main' as never);
+          setTimeout(() => {
+            (navRef.current?.navigate as (name: string, params: Record<string, string>) => void)?.(
+              'RequestDetail',
+              { assignmentId },
+            );
+          }, 100);
+        }
+      },
+      (orderId) => {
+        const nav = navRef.current;
+        if (nav?.isReady()) {
+          nav.navigate('Main' as never);
+          setTimeout(() => {
+            (navRef.current?.navigate as (name: string, params: object) => void)?.(
+              'Orders',
+              { screen: 'OrderDetail', params: { orderId } },
+            );
+          }, 100);
+        }
+      },
+    );
     return cleanup;
   }, []);
 

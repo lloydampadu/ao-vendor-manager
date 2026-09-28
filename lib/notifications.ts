@@ -54,11 +54,14 @@ export async function registerPushToken(): Promise<void> {
  * Sets up foreground and tap notification listeners.
  *
  * @param navigateToAssignment - called with the assignmentId when the vendor
- *   taps a push notification; navigate to RequestDetail with this ID.
+ *   taps an inbox push notification; navigate to RequestDetail with this ID.
+ * @param navigateToOrder - called with the orderId (== assignmentId) when the
+ *   vendor taps an order-paid push notification; navigate to OrderDetail.
  * @returns cleanup function — call it in a useEffect return or on unmount.
  */
 export function setupNotificationListeners(
   navigateToAssignment: (assignmentId: string) => void,
+  navigateToOrder: (orderId: string) => void,
 ): () => void {
   // Foreground: notification received while app is open (just log; alert is
   // already shown by setNotificationHandler above).
@@ -72,8 +75,11 @@ export function setupNotificationListeners(
   const tapSub = Notifications.addNotificationResponseReceivedListener(
     (response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
+      const screen = typeof data?.screen === 'string' ? data.screen : undefined;
       const assignmentId = typeof data?.assignmentId === 'string' ? data.assignmentId : undefined;
-      if (assignmentId) {
+      if (screen === 'orders' && assignmentId) {
+        navigateToOrder(assignmentId);
+      } else if (assignmentId) {
         navigateToAssignment(assignmentId);
       }
     },
