@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0060C0"
-    },
     "android": {
       "package": "com.abosseyokaidirect.vendormanager",
       "googleServicesFile": "./google-services.json",
@@ -31,10 +26,20 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#0060C0",
-          "sounds": ["./assets/notification_request.wav"]
+          "sounds": [
+            "./assets/notification_request.wav"
+          ]
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0060C0"
+        }
+      ]
     ],
     "extra": {
       "eas": {
