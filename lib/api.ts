@@ -53,8 +53,8 @@ export type ApiTyreListing = {
   width: number;
   height: number;
   diameter: number;
-  brand: string;
-  model: string;
+  brand: string | null;
+  model: string | null;
   condition: string;
   priceGhs: number;
   photos: string[];

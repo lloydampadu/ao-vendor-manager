@@ -287,8 +287,8 @@ export async function pushPendingTyreListings(): Promise<void> {
           width: listing.width,
           height: listing.height,
           diameter: listing.diameter,
-          brand: listing.brand,
-          model: listing.model,
+          brand: listing.brand ?? "",
+          model: listing.model ?? "",
           condition: listing.condition,
           price_ghs: listing.priceGhs,
           photos: JSON.stringify(listing.photos),
@@ -317,7 +317,15 @@ export async function pushPendingTyreListings(): Promise<void> {
         await markTyreListingSynced(item.id);
         console.log(`[sync] tyre listing updated for ${item.listing_id.slice(-6)}`);
       } else if (item.op === "delete") {
-        const serverId = typeof payload.server_id === "string" ? payload.server_id : item.listing_id;
+        const serverId = typeof payload.server_id === "string" ? payload.server_id : null;
+        if (!serverId) {
+          // Never synced to the server — deleting a local-only row. Hitting the
+          // API with the local UUID would just 404, so drop it locally only.
+          console.log(`[sync] deleting local-only tyre listing ${item.listing_id.slice(-6)} (no server_id) — skipping API call`);
+          await deleteTyreListing(item.listing_id);
+          await markTyreListingSynced(item.id);
+          continue;
+        }
         console.log(`[sync] deleting tyre listing ${serverId.slice(-6)}`);
         await tyreListingsApi.delete(serverId);
         await deleteTyreListing(item.listing_id);
@@ -357,20 +365,27 @@ export async function pullTyreListings(): Promise<void> {
   console.log(`[sync] server returned ${listings.length} tyre listings`);
 
   for (const l of listings) {
-    await upsertTyreListing({
-      id: l.id,
-      server_id: l.id,
-      width: l.width,
-      height: l.height,
-      diameter: l.diameter,
-      brand: l.brand,
-      model: l.model,
-      condition: l.condition,
-      price_ghs: l.priceGhs,
-      photos: JSON.stringify(l.photos),
-      in_stock: l.inStock ? 1 : 0,
-      updated_at: l.updatedAt,
-    });
+    // brand/model are nullable in the API contract but the SQLite columns are
+    // TEXT NOT NULL — coerce to "". Wrap per row so one bad listing doesn't
+    // abort the whole pull (mirrors the per-item guard in the queue flush).
+    try {
+      await upsertTyreListing({
+        id: l.id,
+        server_id: l.id,
+        width: l.width,
+        height: l.height,
+        diameter: l.diameter,
+        brand: l.brand ?? "",
+        model: l.model ?? "",
+        condition: l.condition,
+        price_ghs: l.priceGhs,
+        photos: JSON.stringify(l.photos),
+        in_stock: l.inStock ? 1 : 0,
+        updated_at: l.updatedAt,
+      });
+    } catch (rowErr) {
+      console.error(`[sync] failed to upsert tyre listing ${l.id?.slice(-6)} — skipping`, rowErr);
+    }
   }
 
   console.log("[sync] pullTyreListings done");
