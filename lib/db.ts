@@ -28,6 +28,28 @@ export type DeclineQueueItem = {
   created_at: string;
 };
 
+export type Order = {
+  id: string;
+  stage: string;
+  won_items: string; // JSON: { partName; condition; earnGhs }[]
+  total_earn_ghs: number;
+  request_data: string; // JSON
+  handed_over_at: string | null;
+  handover_photos: string; // JSON string[]
+  updated_at: string;
+};
+
+export type StageQueueItem = {
+  id: string;
+  order_id: string;
+  stage: string;
+  photos: string; // JSON string[]
+  location: string | null; // JSON { latitude; longitude } or null
+  synced: number;
+  error: string | null;
+  created_at: string;
+};
+
 let _db: SQLite.SQLiteDatabase | null = null;
 
 async function getDb() {
@@ -68,6 +90,26 @@ export async function initDb(): Promise<void> {
     CREATE TABLE IF NOT EXISTS products_cache (
       id TEXT PRIMARY KEY,
       data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      stage TEXT NOT NULL,
+      won_items TEXT NOT NULL,
+      total_earn_ghs INTEGER NOT NULL DEFAULT 0,
+      request_data TEXT NOT NULL,
+      handed_over_at TEXT,
+      handover_photos TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS stage_queue (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      photos TEXT NOT NULL DEFAULT '[]',
+      location TEXT,
+      synced INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TEXT NOT NULL
     );
   `);
 }
@@ -220,4 +262,66 @@ export async function getCachedProducts<T>(): Promise<T[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ id: string; data: string }>(`SELECT data FROM products_cache`);
   return rows.map((r) => JSON.parse(r.data) as T);
+}
+
+export async function upsertOrder(o: Order): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO orders (id, stage, won_items, total_earn_ghs, request_data, handed_over_at, handover_photos, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       stage = excluded.stage,
+       won_items = excluded.won_items,
+       total_earn_ghs = excluded.total_earn_ghs,
+       request_data = excluded.request_data,
+       handed_over_at = excluded.handed_over_at,
+       handover_photos = excluded.handover_photos,
+       updated_at = excluded.updated_at`,
+    [o.id, o.stage, o.won_items, o.total_earn_ghs, o.request_data, o.handed_over_at, o.handover_photos, o.updated_at],
+  );
+}
+
+export async function getOrders(): Promise<Order[]> {
+  const db = await getDb();
+  return db.getAllAsync<Order>(`SELECT * FROM orders ORDER BY updated_at DESC`);
+}
+
+export async function getOrder(id: string): Promise<Order | null> {
+  const db = await getDb();
+  return db.getFirstAsync<Order>(`SELECT * FROM orders WHERE id = ?`, [id]);
+}
+
+export async function countOrdersByStage(stage: string): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) AS n FROM orders WHERE stage = ?`, [stage]);
+  return row?.n ?? 0;
+}
+
+export async function applyLocalStage(orderId: string, stage: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE orders SET stage = ? WHERE id = ?`, [stage, orderId]);
+}
+
+export async function enqueueStage(s: StageQueueItem): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO stage_queue (id, order_id, stage, photos, location, synced, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [s.id, s.order_id, s.stage, s.photos, s.location, s.synced, s.error, s.created_at],
+  );
+}
+
+export async function getPendingStages(): Promise<StageQueueItem[]> {
+  const db = await getDb();
+  return db.getAllAsync<StageQueueItem>(`SELECT * FROM stage_queue WHERE synced = 0 ORDER BY created_at ASC`);
+}
+
+export async function markStageSynced(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE stage_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+}
+
+export async function markStageError(id: string, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE stage_queue SET error = ? WHERE id = ?`, [error, id]);
 }
