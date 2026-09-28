@@ -124,6 +124,7 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
         op,
         listing_id: listingId,
         payload: JSON.stringify({
+          server_id: existing?.server_id ?? null,
           width: w,
           height: h,
           diameter: d,

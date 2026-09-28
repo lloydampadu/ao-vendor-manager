@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -121,17 +122,18 @@ export default function TyreListingsScreen(): React.JSX.Element {
               activeOpacity={0.8}
             >
               <View style={styles.cardBody}>
-                <View style={[styles.thumbPlaceholder, { backgroundColor: C.offwhite }]}>
-                  {photos[0] ? (
-                    // eslint-disable-next-line @typescript-eslint/no-var-requires
-                    <React.Fragment>
-                      {/* Use Ionicons as fallback if expo-image isn't imported */}
-                      <Ionicons name="car-sport-outline" size={28} color={C.primary} />
-                    </React.Fragment>
-                  ) : (
+                {photos[0] ? (
+                  <Image
+                    source={{ uri: photos[0] }}
+                    style={styles.thumb}
+                    contentFit="cover"
+                    cachePolicy="disk"
+                  />
+                ) : (
+                  <View style={[styles.thumbPlaceholder, { backgroundColor: C.offwhite }]}>
                     <Ionicons name="car-sport-outline" size={28} color={C.gray} />
-                  )}
-                </View>
+                  </View>
+                )}
                 <View style={styles.info}>
                   <ReusableText text={sizeLabel} family="bold" size={15} color={C.secondary} />
                   <HeightSpacer height={2} />
@@ -190,6 +192,12 @@ const styles = StyleSheet.create({
     ...SHADOWS.small,
   },
   cardBody: { flexDirection: "row", alignItems: "center" },
+  thumb: {
+    width: 70,
+    height: 70,
+    margin: 10,
+    borderRadius: 8,
+  },
   thumbPlaceholder: {
     width: 70,
     height: 70,
