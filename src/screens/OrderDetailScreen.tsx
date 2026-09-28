@@ -4,7 +4,6 @@ import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getOrder, applyLocalStage, enqueueStage, type Order } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { uploadImage } from "../../lib/upload";
 import { ReusableText, HeightSpacer } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
@@ -42,13 +41,13 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
     if (!perm.granted) { Alert.alert("Camera needed", "Allow the camera to capture proof of handover."); return; }
     const shot = await ImagePicker.launchCameraAsync({ quality: 0.6 });
     if (shot.canceled || !shot.assets?.[0]) return;
+    const localUri = shot.assets[0].uri;
+    // Enqueue with the local file URI — the upload happens at flush time so this
+    // works offline.  setBusy is only used to prevent double-taps while we write
+    // to SQLite, which is fast.
     setBusy(true);
     try {
-      const asset = shot.assets[0];
-      const url = await uploadImage(asset.uri);
-      await queueStage("HANDED_OVER", [url]);
-    } catch {
-      Alert.alert("Upload failed", "Could not upload the photo. Try again when you have signal.");
+      await queueStage("HANDED_OVER", [localUri]);
     } finally {
       setBusy(false);
     }
@@ -92,7 +91,7 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
           ) : null}
           {next ? (
             <TouchableOpacity style={[styles.btn, { backgroundColor: C.primary }]} onPress={() => void onHandedOver()} disabled={busy}>
-              <ReusableText text={busy ? "Uploading…" : "Mark handed over (photo)"} family="bold" size={SIZES.medium} color={C.white} />
+              <ReusableText text={busy ? "Saving…" : "Mark handed over (photo)"} family="bold" size={SIZES.medium} color={C.white} />
             </TouchableOpacity>
           ) : null}
         </View>

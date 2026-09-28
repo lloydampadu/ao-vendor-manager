@@ -13,8 +13,10 @@ import {
   getPendingStages,
   markStageSynced,
   markStageError,
+  applyLocalStage,
   type Assignment,
 } from "./db";
+import { uploadImage } from "./upload";
 
 type ApiAssignment = {
   id: string;
@@ -153,13 +155,39 @@ export async function pushPendingStages(): Promise<void> {
   console.log(`[sync] pushPendingStages: ${queue.length} queued`, queue.map((q) => `${q.order_id.slice(-6)} err=${q.error ?? "none"}`));
 
   for (const item of queue) {
+    // FIX 3: guard against malformed queue rows that would otherwise retry forever.
+    let photos: string[];
+    let location: { latitude: number; longitude: number } | undefined;
     try {
-      const photos = JSON.parse(item.photos) as string[];
-      const location = item.location ? JSON.parse(item.location) : undefined;
+      photos = JSON.parse(item.photos) as string[];
+      location = item.location ? (JSON.parse(item.location) as { latitude: number; longitude: number }) : undefined;
+    } catch (parseErr) {
+      console.error(`[sync] bad payload for stage item ${item.id} — dropping`, parseErr);
+      await markStageSynced(item.id);
+      await markStageError(item.id, "bad payload");
+      continue;
+    }
+
+    try {
+      // FIX 1: upload any local-file URIs before POSTing the stage.
+      // Values that already start with "http" are already uploaded CDN URLs and
+      // pass through unchanged.  Values that don't start with "http" are local
+      // file:// / content:// URIs captured offline and need to be uploaded now.
+      const uploadedPhotos: string[] = [];
+      for (const uri of photos) {
+        if (uri.startsWith("http")) {
+          uploadedPhotos.push(uri);
+        } else {
+          console.log(`[sync] uploading local photo for ${item.order_id.slice(-6)}`);
+          const remoteUrl = await uploadImage(uri);
+          uploadedPhotos.push(remoteUrl);
+        }
+      }
+
       console.log(`[sync] posting stage for ${item.order_id.slice(-6)}`);
       await api.post(`/vendor/orders/${item.order_id}/stage`, {
         stage: item.stage,
-        ...(photos.length ? { photos } : {}),
+        ...(uploadedPhotos.length ? { photos: uploadedPhotos } : {}),
         ...(location ? { location } : {}),
       });
       await markStageSynced(item.id);
@@ -172,6 +200,7 @@ export async function pushPendingStages(): Promise<void> {
         await markStageSynced(item.id);
         await markStageError(item.id, e.status === 404 ? "not found" : "conflict");
       } else {
+        // Upload failure (still offline) or transient error — leave synced=0 for retry.
         await markStageError(item.id, e.message ?? "unknown error");
       }
     }
@@ -202,6 +231,14 @@ export async function pullOrders(): Promise<void> {
       updated_at: new Date().toISOString(),
     });
   }
+
+  // FIX 2: re-apply any pending optimistic stage transitions so a server pull
+  // doesn't clobber a locally-queued forward transition that hasn't flushed yet.
+  const pendingStages = await getPendingStages();
+  for (const pending of pendingStages) {
+    await applyLocalStage(pending.order_id, pending.stage);
+  }
+
   console.log("[sync] pullOrders done");
 }
 
