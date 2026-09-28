@@ -105,11 +105,18 @@ export default function ProductsScreen(): React.JSX.Element {
 
   return (
     <View style={[styles.container, { backgroundColor: C.offwhite }]}>
-      <TouchableOpacity style={[styles.addBtn, { backgroundColor: C.primary }]} onPress={() => nav.navigate("AddPartWizard")} activeOpacity={0.85}>
-        <Ionicons name="add-circle-outline" size={20} color="#fff" />
-        <View style={{ width: 8 }} />
-        <ReusableText text="Add a part" family="bold" size={15} color="#fff" />
-      </TouchableOpacity>
+      <View style={styles.btnRow}>
+        <TouchableOpacity style={[styles.addBtn, styles.addBtnFlex, { backgroundColor: C.primary }]} onPress={() => nav.navigate("AddPartWizard")} activeOpacity={0.85}>
+          <Ionicons name="add-circle-outline" size={20} color="#fff" />
+          <View style={{ width: 6 }} />
+          <ReusableText text="Add a part" family="bold" size={14} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.addBtn, styles.addBtnFlex, { backgroundColor: C.secondary }]} onPress={() => nav.navigate("TyreListings")} activeOpacity={0.85}>
+          <Ionicons name="car-sport-outline" size={20} color="#fff" />
+          <View style={{ width: 6 }} />
+          <ReusableText text="My Tyres" family="bold" size={14} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         data={products}
@@ -173,14 +180,21 @@ export default function ProductsScreen(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  btnRow: {
+    flexDirection: "row",
+    marginHorizontal: 14,
+    marginTop: 14,
+    marginBottom: 0,
+    gap: 8,
+  },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    margin: 14,
     borderRadius: 12,
     paddingVertical: 14,
   },
+  addBtnFlex: { flex: 1 },
   list: { paddingHorizontal: 14, paddingBottom: 30 },
   empty: { alignItems: "center", paddingTop: 80 },
   card: {
