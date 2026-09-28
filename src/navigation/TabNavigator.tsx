@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -7,12 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import InboxStackNavigator from './InboxStackNavigator';
 import ProfileScreen from '../screens/ProfileScreen';
 import ProductsStackNavigator from './ProductsStackNavigator';
+import OrdersStackNavigator from './OrdersStackNavigator';
 import { useThemeColors } from '../../constants/theme';
 import type { InboxStackParamList } from './InboxStackNavigator';
 import type { ProductsStackParamList } from './ProductsStackNavigator';
+import type { OrdersStackParamList } from './OrdersStackNavigator';
+import { countOrdersByStage } from '../../lib/db';
 
 export type TabParamList = {
   Inbox: NavigatorScreenParams<InboxStackParamList> | undefined;
+  Orders: NavigatorScreenParams<OrdersStackParamList> | undefined;
   Products: NavigatorScreenParams<ProductsStackParamList> | undefined;
   Profile: undefined;
 };
@@ -23,6 +27,13 @@ export default function TabNavigator(): React.JSX.Element {
   const C = useThemeColors();
   const insets = useSafeAreaInsets();
   const bottomPad = Platform.OS === 'android' ? Math.max(insets.bottom, 8) : 8;
+  const [toBring, setToBring] = useState(0);
+  useEffect(() => {
+    const tick = () => countOrdersByStage("TO_BRING").then(setToBring).catch(() => {});
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <Tab.Navigator
@@ -52,6 +63,17 @@ export default function TabNavigator(): React.JSX.Element {
           title: 'Inbox',
           tabBarIcon: ({ focused, color }) => (
             <Ionicons name={focused ? 'mail' : 'mail-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Orders"
+        component={OrdersStackNavigator}
+        options={{
+          title: 'Orders',
+          tabBarBadge: toBring > 0 ? toBring : undefined,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'receipt' : 'receipt-outline'} size={24} color={color} />
           ),
         }}
       />
