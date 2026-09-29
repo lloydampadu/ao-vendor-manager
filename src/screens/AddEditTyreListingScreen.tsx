@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,9 +17,12 @@ import {
   initDb,
   upsertTyreListing,
   enqueueTyreListing,
+  getCachedTyreCatalog,
 } from "@/lib/db";
-import type { TyreListing } from "@/lib/db";
+import type { TyreListing, CatalogBrand } from "@/lib/db";
 import { useSyncStore } from "@/store/sync-store";
+import SelectField from "../../components/Reusable/SelectField";
+import { WIDTHS, HEIGHTS, DIAMETERS } from "@/lib/tyre-sizes";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
@@ -59,6 +62,18 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
   const [localUris, setLocalUris] = useState<string[]>(existingPhotos);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogBrand[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      await initDb();
+      setCatalog(await getCachedTyreCatalog());
+    })();
+  }, []);
+
+  const brandNames = catalog.map((b) => b.brandName);
+  const modelsForBrand =
+    catalog.find((b) => b.brandName === brand)?.models.map((m) => m.name) ?? [];
 
   async function pickPhoto(): Promise<void> {
     if (photos.length >= 4) {
@@ -159,65 +174,55 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Size inputs */}
+      {/* Size selectors */}
       <View style={styles.sizeRow}>
         <View style={[styles.sizeField, { flex: 1 }]}>
-          <Field label="Width (mm) *" C={C}>
-            <TextInput
-              style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-              value={width}
-              onChangeText={setWidth}
-              keyboardType="number-pad"
-              placeholder="205"
-              placeholderTextColor={C.gray2}
-            />
-          </Field>
+          <SelectField
+            label="Width (mm) *"
+            value={width}
+            onChange={setWidth}
+            options={WIDTHS.map(String)}
+            placeholder="205"
+            keyboardType="number-pad"
+          />
         </View>
         <View style={[styles.sizeField, { flex: 1 }]}>
-          <Field label="Height (%) *" C={C}>
-            <TextInput
-              style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-              value={height}
-              onChangeText={setHeight}
-              keyboardType="number-pad"
-              placeholder="55"
-              placeholderTextColor={C.gray2}
-            />
-          </Field>
+          <SelectField
+            label="Height (%) *"
+            value={height}
+            onChange={setHeight}
+            options={HEIGHTS.map(String)}
+            placeholder="55"
+            keyboardType="number-pad"
+          />
         </View>
         <View style={[styles.sizeField, { flex: 1 }]}>
-          <Field label='Rim (") *' C={C}>
-            <TextInput
-              style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-              value={diameter}
-              onChangeText={setDiameter}
-              keyboardType="number-pad"
-              placeholder="16"
-              placeholderTextColor={C.gray2}
-            />
-          </Field>
+          <SelectField
+            label={'Rim (") *'}
+            value={diameter}
+            onChange={setDiameter}
+            options={DIAMETERS.map(String)}
+            placeholder="16"
+            keyboardType="number-pad"
+          />
         </View>
       </View>
 
-      <Field label="Brand *" C={C}>
-        <TextInput
-          style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-          value={brand}
-          onChangeText={setBrand}
-          placeholder="e.g. Bridgestone"
-          placeholderTextColor={C.gray2}
-        />
-      </Field>
+      <SelectField
+        label="Brand *"
+        value={brand}
+        onChange={(v) => { setBrand(v); setModel(""); }}
+        options={brandNames}
+        placeholder="Select brand"
+      />
 
-      <Field label="Model *" C={C}>
-        <TextInput
-          style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-          value={model}
-          onChangeText={setModel}
-          placeholder="e.g. Turanza T001"
-          placeholderTextColor={C.gray2}
-        />
-      </Field>
+      <SelectField
+        label="Model *"
+        value={model}
+        onChange={setModel}
+        options={modelsForBrand}
+        placeholder="Select model"
+      />
 
       <Field label="Condition" C={C}>
         <View style={styles.conditionRow}>
