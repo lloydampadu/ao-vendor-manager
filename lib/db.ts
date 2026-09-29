@@ -91,6 +91,11 @@ export async function initDb(): Promise<void> {
       id TEXT PRIMARY KEY,
       data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS tyre_catalog_cache (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS orders (
       id TEXT PRIMARY KEY,
       stage TEXT NOT NULL,
@@ -285,6 +290,35 @@ export async function getCachedProducts<T>(): Promise<T[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ id: string; data: string }>(`SELECT data FROM products_cache`);
   return rows.map((r) => JSON.parse(r.data) as T);
+}
+
+export type CatalogModel = { name: string; slug: string; type: string | null };
+export type CatalogBrand = {
+  brandName: string;
+  brandSlug: string;
+  tier: string;
+  models: CatalogModel[];
+};
+
+export async function cacheTyreCatalog(brands: CatalogBrand[]): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO tyre_catalog_cache (id, json, updated_at) VALUES (1, ?, ?)`,
+    [JSON.stringify(brands), new Date().toISOString()],
+  );
+}
+
+export async function getCachedTyreCatalog(): Promise<CatalogBrand[]> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ json: string }>(
+    `SELECT json FROM tyre_catalog_cache WHERE id = 1`,
+  );
+  if (!row) return [];
+  try {
+    return JSON.parse(row.json) as CatalogBrand[];
+  } catch {
+    return [];
+  }
 }
 
 export async function upsertOrder(o: Order): Promise<void> {
