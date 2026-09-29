@@ -39,6 +39,11 @@ const CONDITION_LABEL: Record<Condition, string> = {
   REFURBISHED: "Refurbished",
 };
 
+// Ghanaian vendors pick the kind of tyre, not an exact product name — this maps
+// to the customer-facing "Tyre type" categories. Stored in the listing's model
+// field.
+const TYRE_TYPES = ["All-Season", "Performance", "Off-road", "Standard"];
+
 export default function AddEditTyreListingScreen(): React.JSX.Element {
   const C = useThemeColors();
   const nav = useNavigation();
@@ -72,8 +77,6 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
   }, []);
 
   const brandNames = catalog.map((b) => b.brandName);
-  const modelsForBrand =
-    catalog.find((b) => b.brandName === brand)?.models.map((m) => m.name) ?? [];
 
   async function pickPhoto(): Promise<void> {
     if (photos.length >= 4) {
@@ -107,7 +110,7 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
     if (!h || h <= 0) { Alert.alert("Please enter a valid tyre height (e.g. 55)"); return; }
     if (!d || d <= 0) { Alert.alert("Please enter a valid rim diameter (e.g. 16)"); return; }
     if (!brand.trim()) { Alert.alert("Please enter the brand name"); return; }
-    if (!model.trim()) { Alert.alert("Please enter the model name"); return; }
+    if (!model.trim()) { Alert.alert("Please choose the tyre type"); return; }
     const priceGhs = parseInt(price, 10);
     if (!priceGhs || priceGhs <= 0) { Alert.alert("Please enter a valid price"); return; }
     if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
@@ -211,17 +214,17 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
       <SelectField
         label="Brand *"
         value={brand}
-        onChange={(v) => { setBrand(v); setModel(""); }}
+        onChange={setBrand}
         options={brandNames}
         placeholder="Select brand"
       />
 
       <SelectField
-        label="Model *"
+        label="Tyre type *"
         value={model}
         onChange={setModel}
-        options={modelsForBrand}
-        placeholder="Select model"
+        options={TYRE_TYPES}
+        placeholder="Select tyre type"
       />
 
       <Field label="Condition" C={C}>
