@@ -1,4 +1,4 @@
-import { api, tyreListingsApi } from "./api";
+import { api, tyreListingsApi, tyreCatalogApi } from "./api";
 import {
   upsertAssignment,
   getAssignments,
@@ -19,6 +19,7 @@ import {
   markTyreListingSynced,
   markTyreListingError,
   deleteTyreListing,
+  cacheTyreCatalog,
   type Assignment,
 } from "./db";
 import { uploadImage } from "./upload";
@@ -391,6 +392,19 @@ export async function pullTyreListings(): Promise<void> {
   console.log("[sync] pullTyreListings done");
 }
 
+export async function pullTyreCatalog(): Promise<void> {
+  console.log("[sync] pullTyreCatalog: fetching /tyres/catalog");
+  try {
+    const { brands } = await tyreCatalogApi.get();
+    await cacheTyreCatalog(brands);
+    console.log(`[sync] pullTyreCatalog done — ${brands.length} brands`);
+  } catch (err) {
+    // Best-effort: the entry screen degrades to free text without the
+    // catalog, so a failed pull must not break the rest of sync.
+    console.warn("[sync] pullTyreCatalog failed:", err);
+  }
+}
+
 export async function sync(): Promise<void> {
   console.log("[sync] ---- sync started ---- API:", process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000");
   await pullAssignments();
@@ -400,5 +414,6 @@ export async function sync(): Promise<void> {
   await pullOrders();
   await pushPendingTyreListings();
   await pullTyreListings();
+  await pullTyreCatalog();
   console.log("[sync] ---- sync complete ----");
 }

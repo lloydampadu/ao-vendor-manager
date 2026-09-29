@@ -68,3 +68,15 @@ export const tyreListingsApi = {
   update: (id: string, body: unknown) => api.patch<{ listing: ApiTyreListing }>(`/vendor/tyre-listings/${id}`, body),
   delete: (id: string) => api.delete<void>(`/vendor/tyre-listings/${id}`),
 };
+
+export type ApiTyreCatalogModel = { name: string; slug: string; type: string | null };
+export type ApiTyreCatalogBrand = {
+  brandName: string;
+  brandSlug: string;
+  tier: string;
+  models: ApiTyreCatalogModel[];
+};
+
+export const tyreCatalogApi = {
+  get: () => api.get<{ brands: ApiTyreCatalogBrand[] }>("/tyres/catalog"),
+};
