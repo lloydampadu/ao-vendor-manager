@@ -64,7 +64,7 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
 
   if (!order) return <View style={{ flex: 1, backgroundColor: C.offwhite }} />;
 
-  const req = JSON.parse(order.request_data) as { partName: string; make?: string; model?: string; year?: number };
+  const req = JSON.parse(order.request_data) as { partName: string; make?: string; model?: string; year?: number; customerName?: string };
   const items = JSON.parse(order.won_items) as WonItem[];
   const car = [req.make, req.model, req.year].filter(Boolean).join(" ");
   const next = NEXT[order.stage];
@@ -78,6 +78,12 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
       <View style={[styles.paidBadge, { backgroundColor: C.green }]}>
         <ReusableText text="✓ Customer has paid" family="medium" size={SIZES.small} color={C.white} />
       </View>
+      {req.customerName ? (
+        <>
+          <HeightSpacer height={10} />
+          <ReusableText text={`Customer: ${req.customerName}`} family="medium" size={SIZES.small} color={C.secondary} />
+        </>
+      ) : null}
       <HeightSpacer height={16} />
 
       <ReusableText text="Bring these" family="medium" size={SIZES.medium} color={C.secondary} />
