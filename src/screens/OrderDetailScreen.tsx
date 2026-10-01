@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getOrder, applyLocalStage, enqueueStage, type Order } from "../../lib/db";
@@ -10,6 +10,10 @@ import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderDetail">;
 type WonItem = { partName: string; condition: string; earnGhs: number; photos?: string[] };
+
+// AbosseyOkai ops line — the vendor calls this to tell us the part is ready to collect.
+const SUPPORT_PHONE = "+233506221697";
+const SUPPORT_DISPLAY = "050 622 1697";
 
 // Surface New/Used as a clear badge. Tyre options embed it as "... (NEW)";
 // regular parts use "Brand New" / "Home Used". Anything else (e.g. "Separated")
@@ -43,6 +47,12 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
 
   // "Ready for pickup" reuses the ON_THE_WAY stage — no photo needed at this step.
   const onMarkReady = useCallback(() => { void queueStage("ON_THE_WAY", []); }, [queueStage]);
+
+  const callSupport = useCallback(() => {
+    Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() => {
+      Alert.alert("Couldn't open dialer", `Call AbosseyOkai on ${SUPPORT_DISPLAY}.`);
+    });
+  }, []);
 
   const onHandedOver = useCallback(async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -89,6 +99,10 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
         size={SIZES.small}
         color={C.gray2}
       />
+      <HeightSpacer height={8} />
+      <TouchableOpacity onPress={callSupport} style={[styles.callRow, { borderColor: C.primary }]}>
+        <ReusableText text={`📞 Call us when it's ready — ${SUPPORT_DISPLAY}`} family="medium" size={SIZES.small} color={C.primary} />
+      </TouchableOpacity>
       <HeightSpacer height={16} />
 
       <ReusableText text="Get these ready" family="medium" size={SIZES.medium} color={C.secondary} />
@@ -156,5 +170,6 @@ const styles = StyleSheet.create({
   itemNameWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   condChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
   photoRow: { paddingVertical: 10 },
+  callRow: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   btn: { padding: 14, borderRadius: 12, borderWidth: 1, alignItems: "center" },
 });
