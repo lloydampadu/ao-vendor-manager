@@ -13,6 +13,15 @@ type WonItem = { partName: string; condition: string; earnGhs: number; photos?: 
 
 const NEXT: Record<string, string | null> = { TO_BRING: "ON_THE_WAY", ON_THE_WAY: "HANDED_OVER", HANDED_OVER: null };
 
+// Surface New/Used as a clear badge. Tyre options embed it as "... (NEW)";
+// regular parts use "Brand New" / "Home Used". Anything else (e.g. "Separated")
+// falls back to showing the raw label.
+function conditionLabel(raw: string): string {
+  const m = raw.match(/\b(new|used)\b/i);
+  if (m) return m[1].toLowerCase() === "new" ? "New" : "Used";
+  return raw.trim();
+}
+
 export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
   const C = useThemeColors();
   const { orderId } = route.params;
@@ -72,24 +81,36 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
       <HeightSpacer height={16} />
 
       <ReusableText text="Bring these" family="medium" size={SIZES.medium} color={C.secondary} />
-      {items.map((it, i) => (
-        <View key={i}>
-          <View style={[styles.itemRow, { borderColor: C.gray }]}>
-            <ReusableText text={`${it.partName} · ${it.condition}`} family="regular" size={SIZES.small} color={C.black} />
-            <ReusableText text={`GHS ${it.earnGhs}`} family="medium" size={SIZES.small} color={C.primary} />
+      {items.map((it, i) => {
+        const cond = conditionLabel(it.condition);
+        return (
+          <View key={i} style={[styles.itemBlock, { borderColor: C.gray }]}>
+            <View style={styles.itemRow}>
+              <View style={styles.itemNameWrap}>
+                <ReusableText text={it.partName} family="medium" size={SIZES.small} color={C.black} />
+                {cond ? (
+                  <View style={[styles.condChip, { backgroundColor: cond === "Used" ? C.secondary : C.primary }]}>
+                    <ReusableText text={cond} family="medium" size={SIZES.small} color={C.white} />
+                  </View>
+                ) : null}
+              </View>
+              <ReusableText text={`GHS ${it.earnGhs}`} family="medium" size={SIZES.small} color={C.primary} />
+            </View>
+            {/* Full line (brand, size, condition) so the vendor sees exactly what to bring. */}
+            <ReusableText text={it.condition} family="regular" size={SIZES.small} color={C.gray2} />
+            {it.photos && it.photos.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
+                {it.photos.map((uri, p) => (
+                  <View key={p} style={{ marginRight: 8 }}>
+                    <NetworkImage source={uri} width={96} height={96} radius={8} />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
           </View>
-          {it.photos && it.photos.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
-              {it.photos.map((uri, p) => (
-                <View key={p} style={{ marginRight: 8 }}>
-                  <NetworkImage source={uri} width={96} height={96} radius={8} />
-                </View>
-              ))}
-            </ScrollView>
-          ) : null}
-        </View>
-      ))}
-      <HeightSpacer height={8} />
+        );
+      })}
+      <HeightSpacer height={12} />
       <View style={styles.itemRow}>
         <ReusableText text="You earn" family="medium" size={SIZES.medium} color={C.black} />
         <ReusableText text={`GHS ${order.total_earn_ghs}`} family="bold" size={SIZES.medium} color={C.primary} />
@@ -119,7 +140,10 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
 const styles = StyleSheet.create({
   body: { padding: 16 },
   paidBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  itemBlock: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  itemNameWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  condChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
   photoRow: { paddingVertical: 10 },
   btn: { padding: 14, borderRadius: 12, borderWidth: 1, alignItems: "center" },
 });
