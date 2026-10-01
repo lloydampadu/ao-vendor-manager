@@ -1,26 +1,51 @@
-import React, { useEffect } from "react";
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "../../store/auth-store";
 import { api } from "@/lib/api";
-import { Card, ReusableBtn, ReusableText, HeightSpacer } from "../../components";
+import { uploadImage } from "@/lib/upload";
+import { Card, ReusableBtn, ReusableText, HeightSpacer, NetworkImage } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
-type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] } };
+type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[]; imageUrl?: string | null } };
 
 export default function ProfileScreen(): React.JSX.Element {
   const C = useThemeColors();
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { vendor, setVendor, clearAuth } = useAuthStore();
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     api.get<VendorMe>("/vendor-auth/me")
       .then(({ vendor: v }) => setVendor({ ...v, specialties: v.specialties ?? [], brands: v.brands ?? [] }))
       .catch(() => {});
   }, []);
+
+  async function changePhoto(): Promise<void> {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    setUploading(true);
+    try {
+      const imageUrl = await uploadImage(result.assets[0].uri);
+      await api.patch("/vendor-auth/image", { imageUrl });
+      if (vendor) setVendor({ ...vendor, imageUrl });
+    } catch (e) {
+      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not update your photo. Try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const initials = (vendor?.name ?? "V").trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "V";
 
   function logout(): void {
     Alert.alert("Log out", "Are you sure you want to log out?", [
@@ -42,6 +67,23 @@ export default function ProfileScreen(): React.JSX.Element {
     <SafeAreaView edges={["bottom"]} style={[styles.safe, { backgroundColor: C.offwhite }]}>
       <View style={styles.container}>
         <Card>
+          <View style={styles.avatarWrap}>
+            {vendor?.imageUrl ? (
+              <NetworkImage source={vendor.imageUrl} width={96} height={96} radius={48} />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: C.offwhite, borderColor: C.gray }]}>
+                <ReusableText text={initials} family="bold" size={28} color={C.gray2} />
+              </View>
+            )}
+            <TouchableOpacity onPress={() => void changePhoto()} disabled={uploading} style={[styles.changePhoto, { borderColor: C.primary }]}>
+              {uploading ? (
+                <ActivityIndicator size="small" color={C.primary} />
+              ) : (
+                <ReusableText text={vendor?.imageUrl ? "Change photo" : "Add photo"} family="medium" size={SIZES.small} color={C.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
+          <HeightSpacer height={12} />
           <ReusableText text={vendor?.name ?? "Vendor"} family="bold" size={18} color={C.secondary} />
           <HeightSpacer height={4} />
           <ReusableText text={vendor?.phone ?? ""} family="regular" size={SIZES.medium} color={C.gray2} />
@@ -56,30 +98,7 @@ export default function ProfileScreen(): React.JSX.Element {
               />
             </>
           )}
-          {vendor?.specialties && vendor.specialties.length > 0 && (
-            <>
-              <HeightSpacer height={10} />
-              <ReusableText text="Parts I sell" family="medium" size={SIZES.small} color={C.secondary} />
-              <HeightSpacer height={6} />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -2 }}>
-                {vendor.specialties.map((part) => (
-                  <View key={part} style={[styles.chip, { borderColor: C.primary, backgroundColor: C.primary1 }]}>
-                    <ReusableText text={part} family="regular" size={11} color={C.primary} />
-                  </View>
-                ))}
-              </ScrollView>
-            </>
-          )}
         </Card>
-
-        <HeightSpacer height={12} />
-
-        <TouchableOpacity
-          style={[styles.editSpecialties, { borderColor: C.primary, backgroundColor: C.primary1 }]}
-          onPress={() => rootNav.navigate("Onboarding")}
-        >
-          <ReusableText text="Change what I sell" family="medium" size={SIZES.small} color={C.primary} />
-        </TouchableOpacity>
 
         <HeightSpacer height={16} />
 
@@ -103,18 +122,7 @@ export default function ProfileScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   container: { flex: 1, padding: 16 },
-  editSpecialties: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 6,
-    marginVertical: 2,
-  },
+  avatarWrap: { alignItems: "center", gap: 10 },
+  avatarPlaceholder: { width: 96, height: 96, borderRadius: 48, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  changePhoto: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
 });
