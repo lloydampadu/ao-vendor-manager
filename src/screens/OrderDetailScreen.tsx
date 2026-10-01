@@ -11,8 +11,6 @@ import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderDetail">;
 type WonItem = { partName: string; condition: string; earnGhs: number; photos?: string[] };
 
-const NEXT: Record<string, string | null> = { TO_BRING: "ON_THE_WAY", ON_THE_WAY: "HANDED_OVER", HANDED_OVER: null };
-
 // Surface New/Used as a clear badge. Tyre options embed it as "... (NEW)";
 // regular parts use "Brand New" / "Home Used". Anything else (e.g. "Separated")
 // falls back to showing the raw label.
@@ -43,7 +41,8 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
     startSync().catch(() => {});
   }, [orderId, load, startSync]);
 
-  const onOnTheWay = useCallback(() => { void queueStage("ON_THE_WAY", []); }, [queueStage]);
+  // "Ready for pickup" reuses the ON_THE_WAY stage — no photo needed at this step.
+  const onMarkReady = useCallback(() => { void queueStage("ON_THE_WAY", []); }, [queueStage]);
 
   const onHandedOver = useCallback(async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -67,7 +66,6 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
   const req = JSON.parse(order.request_data) as { partName: string; make?: string; model?: string; year?: number; customerName?: string };
   const items = JSON.parse(order.won_items) as WonItem[];
   const car = [req.make, req.model, req.year].filter(Boolean).join(" ");
-  const next = NEXT[order.stage];
 
   return (
     <ScrollView style={{ backgroundColor: C.offwhite }} contentContainerStyle={styles.body}>
@@ -84,9 +82,16 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
           <ReusableText text={`Customer: ${req.customerName}`} family="medium" size={SIZES.small} color={C.secondary} />
         </>
       ) : null}
+      <HeightSpacer height={10} />
+      <ReusableText
+        text="AbosseyOkai will collect this from you and deliver it to the customer."
+        family="regular"
+        size={SIZES.small}
+        color={C.gray2}
+      />
       <HeightSpacer height={16} />
 
-      <ReusableText text="Bring these" family="medium" size={SIZES.medium} color={C.secondary} />
+      <ReusableText text="Get these ready" family="medium" size={SIZES.medium} color={C.secondary} />
       {items.map((it, i) => {
         const cond = conditionLabel(it.condition);
         return (
@@ -124,19 +129,19 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
 
       <HeightSpacer height={24} />
       {order.stage === "HANDED_OVER" ? (
-        <ReusableText text="✅ Handed over to AbosseyOkai" family="medium" size={SIZES.medium} color={C.secondary} />
+        <ReusableText text="✅ Handed to AbosseyOkai rider" family="medium" size={SIZES.medium} color={C.secondary} />
+      ) : order.stage === "TO_BRING" ? (
+        // Just landed — vendor gets the part ready for our rider to collect.
+        <TouchableOpacity style={[styles.btn, { backgroundColor: C.primary }]} onPress={onMarkReady} disabled={busy}>
+          <ReusableText text="Mark ready for pickup" family="bold" size={SIZES.medium} color={C.white} />
+        </TouchableOpacity>
       ) : (
+        // ON_THE_WAY = ready, waiting for our rider to come and collect it.
         <View style={{ gap: 10 }}>
-          {order.stage === "TO_BRING" ? (
-            <TouchableOpacity style={[styles.btn, { backgroundColor: C.offwhite, borderColor: C.primary }]} onPress={onOnTheWay} disabled={busy}>
-              <ReusableText text="I'm on the way" family="medium" size={SIZES.medium} color={C.primary} />
-            </TouchableOpacity>
-          ) : null}
-          {next ? (
-            <TouchableOpacity style={[styles.btn, { backgroundColor: C.primary }]} onPress={() => void onHandedOver()} disabled={busy}>
-              <ReusableText text={busy ? "Saving…" : "Mark handed over (photo)"} family="bold" size={SIZES.medium} color={C.white} />
-            </TouchableOpacity>
-          ) : null}
+          <ReusableText text="✅ Ready — waiting for our rider" family="medium" size={SIZES.medium} color={C.secondary} />
+          <TouchableOpacity style={[styles.btn, { backgroundColor: C.primary }]} onPress={() => void onHandedOver()} disabled={busy}>
+            <ReusableText text={busy ? "Saving…" : "Hand over to rider (take photo)"} family="bold" size={SIZES.medium} color={C.white} />
+          </TouchableOpacity>
         </View>
       )}
     </ScrollView>

@@ -10,8 +10,10 @@ import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
 
 type Props = { navigation: NativeStackNavigationProp<OrdersStackParamList, "OrdersList"> };
 
+// The stage enum is reused for the pickup model: AbosseyOkai collects from the
+// vendor, so the vendor only prepares the part and hands it to our rider.
 const STAGE_LABEL: Record<string, string> = {
-  TO_BRING: "To bring", ON_THE_WAY: "On the way", HANDED_OVER: "Handed over",
+  TO_BRING: "Preparing", ON_THE_WAY: "Ready for pickup", HANDED_OVER: "Collected",
 };
 
 export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
