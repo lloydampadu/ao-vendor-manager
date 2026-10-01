@@ -4,7 +4,7 @@ import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getOrders, initDb, type Order } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { ReusableText, HeightSpacer, InboxSkeletonList } from "../../components";
+import { ReusableText, HeightSpacer, InboxSkeletonList, NetworkImage } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
 
@@ -69,24 +69,31 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
       renderItem={({ item }) => {
         const req = JSON.parse(item.request_data) as { partName: string; make?: string; model?: string; year?: number };
         const car = [req.make, req.model, req.year].filter(Boolean).join(" ");
+        const wonItems = JSON.parse(item.won_items) as { photos?: string[] }[];
+        const thumb = wonItems.flatMap((w) => w.photos ?? [])[0];
         return (
           <TouchableOpacity
             style={[styles.card, { backgroundColor: C.white, borderColor: C.gray }]}
             onPress={() => navigation.navigate("OrderDetail", { orderId: item.id })}
           >
-            <ReusableText text={req.partName} family="medium" size={SIZES.medium} color={C.black} />
-            {car ? <ReusableText text={car} family="regular" size={SIZES.small} color={C.gray2} /> : null}
-            <HeightSpacer height={8} />
-            <View style={styles.row}>
-              <ReusableText text={`GHS ${item.total_earn_ghs}`} family="bold" size={SIZES.medium} color={C.primary} />
-              <View style={styles.chipGroup}>
-                {/* Orders only reach this tab once the customer has paid, so the
-                    Paid badge is always shown — the vendor shouldn't have to infer it. */}
-                <View style={[styles.chip, { backgroundColor: C.green }]}>
-                  <ReusableText text="✓ Paid" family="medium" size={SIZES.small} color={C.white} />
-                </View>
-                <View style={[styles.chip, { backgroundColor: C.offwhite }]}>
-                  <ReusableText text={STAGE_LABEL[item.stage] ?? item.stage} family="medium" size={SIZES.small} color={C.secondary} />
+            <View style={styles.cardRow}>
+              {thumb ? <NetworkImage source={thumb} width={56} height={56} radius={8} /> : null}
+              <View style={styles.cardBody}>
+                <ReusableText text={req.partName} family="medium" size={SIZES.medium} color={C.black} />
+                {car ? <ReusableText text={car} family="regular" size={SIZES.small} color={C.gray2} /> : null}
+                <HeightSpacer height={8} />
+                <View style={styles.row}>
+                  <ReusableText text={`GHS ${item.total_earn_ghs}`} family="bold" size={SIZES.medium} color={C.primary} />
+                  <View style={styles.chipGroup}>
+                    {/* Orders only reach this tab once the customer has paid, so the
+                        Paid badge is always shown — the vendor shouldn't have to infer it. */}
+                    <View style={[styles.chip, { backgroundColor: C.green }]}>
+                      <ReusableText text="✓ Paid" family="medium" size={SIZES.small} color={C.white} />
+                    </View>
+                    <View style={[styles.chip, { backgroundColor: C.offwhite }]}>
+                      <ReusableText text={STAGE_LABEL[item.stage] ?? item.stage} family="medium" size={SIZES.small} color={C.secondary} />
+                    </View>
+                  </View>
                 </View>
               </View>
             </View>
@@ -100,6 +107,8 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
 const styles = StyleSheet.create({
   list: { padding: 12, gap: 10, flexGrow: 1 },
   card: { padding: 14, borderRadius: 12, borderWidth: 1 },
+  cardRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+  cardBody: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   chipGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
   chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
