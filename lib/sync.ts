@@ -19,6 +19,7 @@ import {
   markTyreListingSynced,
   markTyreListingError,
   deleteTyreListing,
+  deleteDuplicateTyreListings,
   cacheTyreCatalog,
   type Assignment,
 } from "./db";
@@ -40,7 +41,7 @@ type ApiOrder = {
   handedOverAt: string | null;
   handoverPhotos: string[];
   request: unknown;
-  wonItems: { partName: string; condition: string; earnGhs: number }[];
+  wonItems: { partName: string; condition: string; earnGhs: number; photos: string[] }[];
   totalEarnGhs: number;
 };
 
@@ -281,9 +282,14 @@ export async function pushPendingTyreListings(): Promise<void> {
         const body = { ...payload, ...(uploadedPhotos.length ? { photos: uploadedPhotos } : {}) };
         console.log(`[sync] creating tyre listing for ${item.listing_id.slice(-6)}`);
         const { listing } = await tyreListingsApi.create(body);
-        // Update local record with the server-assigned id.
+        // Re-key the local row from the temporary "local-…" id to the server id.
+        // pullTyreListings keys rows by the server id, so if we kept the local
+        // id here a later pull would insert a second row for the same tyre.
+        if (item.listing_id !== listing.id) {
+          await deleteTyreListing(item.listing_id);
+        }
         await upsertTyreListing({
-          id: item.listing_id,
+          id: listing.id,
           server_id: listing.id,
           width: listing.width,
           height: listing.height,
@@ -384,6 +390,8 @@ export async function pullTyreListings(): Promise<void> {
         in_stock: l.inStock ? 1 : 0,
         updated_at: l.updatedAt,
       });
+      // Clean up any older duplicate keyed by a temporary local id.
+      await deleteDuplicateTyreListings(l.id, l.id);
     } catch (rowErr) {
       console.error(`[sync] failed to upsert tyre listing ${l.id?.slice(-6)} — skipping`, rowErr);
     }

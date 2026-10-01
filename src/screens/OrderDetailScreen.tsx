@@ -4,12 +4,12 @@ import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getOrder, applyLocalStage, enqueueStage, type Order } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { ReusableText, HeightSpacer } from "../../components";
+import { ReusableText, HeightSpacer, NetworkImage } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
 
 type Props = NativeStackScreenProps<OrdersStackParamList, "OrderDetail">;
-type WonItem = { partName: string; condition: string; earnGhs: number };
+type WonItem = { partName: string; condition: string; earnGhs: number; photos?: string[] };
 
 const NEXT: Record<string, string | null> = { TO_BRING: "ON_THE_WAY", ON_THE_WAY: "HANDED_OVER", HANDED_OVER: null };
 
@@ -64,13 +64,29 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
     <ScrollView style={{ backgroundColor: C.offwhite }} contentContainerStyle={styles.body}>
       <ReusableText text={req.partName} family="bold" size={SIZES.large} color={C.black} />
       {car ? <ReusableText text={car} family="regular" size={SIZES.medium} color={C.gray2} /> : null}
+      <HeightSpacer height={10} />
+      {/* An order only exists here once the customer has paid — make that explicit. */}
+      <View style={[styles.paidBadge, { backgroundColor: C.green }]}>
+        <ReusableText text="✓ Customer has paid" family="medium" size={SIZES.small} color={C.white} />
+      </View>
       <HeightSpacer height={16} />
 
       <ReusableText text="Bring these" family="medium" size={SIZES.medium} color={C.secondary} />
       {items.map((it, i) => (
-        <View key={i} style={[styles.itemRow, { borderColor: C.gray }]}>
-          <ReusableText text={`${it.partName} · ${it.condition}`} family="regular" size={SIZES.small} color={C.black} />
-          <ReusableText text={`GHS ${it.earnGhs}`} family="medium" size={SIZES.small} color={C.primary} />
+        <View key={i}>
+          <View style={[styles.itemRow, { borderColor: C.gray }]}>
+            <ReusableText text={`${it.partName} · ${it.condition}`} family="regular" size={SIZES.small} color={C.black} />
+            <ReusableText text={`GHS ${it.earnGhs}`} family="medium" size={SIZES.small} color={C.primary} />
+          </View>
+          {it.photos && it.photos.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
+              {it.photos.map((uri, p) => (
+                <View key={p} style={{ marginRight: 8 }}>
+                  <NetworkImage source={uri} width={96} height={96} radius={8} />
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
         </View>
       ))}
       <HeightSpacer height={8} />
@@ -102,6 +118,8 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
 
 const styles = StyleSheet.create({
   body: { padding: 16 },
+  paidBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  photoRow: { paddingVertical: 10 },
   btn: { padding: 14, borderRadius: 12, borderWidth: 1, alignItems: "center" },
 });

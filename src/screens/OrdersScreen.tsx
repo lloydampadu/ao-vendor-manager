@@ -79,8 +79,15 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
             <HeightSpacer height={8} />
             <View style={styles.row}>
               <ReusableText text={`GHS ${item.total_earn_ghs}`} family="bold" size={SIZES.medium} color={C.primary} />
-              <View style={[styles.chip, { backgroundColor: C.offwhite }]}>
-                <ReusableText text={STAGE_LABEL[item.stage] ?? item.stage} family="medium" size={SIZES.small} color={C.secondary} />
+              <View style={styles.chipGroup}>
+                {/* Orders only reach this tab once the customer has paid, so the
+                    Paid badge is always shown — the vendor shouldn't have to infer it. */}
+                <View style={[styles.chip, { backgroundColor: C.green }]}>
+                  <ReusableText text="✓ Paid" family="medium" size={SIZES.small} color={C.white} />
+                </View>
+                <View style={[styles.chip, { backgroundColor: C.offwhite }]}>
+                  <ReusableText text={STAGE_LABEL[item.stage] ?? item.stage} family="medium" size={SIZES.small} color={C.secondary} />
+                </View>
               </View>
             </View>
           </TouchableOpacity>
@@ -94,6 +101,7 @@ const styles = StyleSheet.create({
   list: { padding: 12, gap: 10, flexGrow: 1 },
   card: { padding: 14, borderRadius: 12, borderWidth: 1 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  chipGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
   chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
 });
