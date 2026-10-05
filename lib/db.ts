@@ -441,6 +441,17 @@ export async function deleteTyreListing(id: string): Promise<void> {
   await db.runAsync(`DELETE FROM tyre_listings WHERE id = ?`, [id]);
 }
 
+// Remove any stale rows that point at the same server listing but are keyed by
+// a different (e.g. temporary "local-…") id. Guards against duplicates left by
+// older builds where the create flush didn't re-key the local row.
+export async function deleteDuplicateTyreListings(serverId: string, keepId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `DELETE FROM tyre_listings WHERE server_id = ? AND id != ?`,
+    [serverId, keepId],
+  );
+}
+
 export async function enqueueTyreListing(q: TyreListingQueueItem): Promise<void> {
   const db = await getDb();
   await db.runAsync(

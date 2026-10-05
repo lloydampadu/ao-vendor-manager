@@ -111,11 +111,6 @@ export default function ProductsScreen(): React.JSX.Element {
           <View style={{ width: 6 }} />
           <ReusableText text="Add a part" family="bold" size={14} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.addBtn, styles.addBtnFlex, { backgroundColor: C.secondary }]} onPress={() => nav.navigate("TyreListings")} activeOpacity={0.85}>
-          <Ionicons name="car-sport-outline" size={20} color="#fff" />
-          <View style={{ width: 6 }} />
-          <ReusableText text="My Tyres" family="bold" size={14} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <FlatList

@@ -30,13 +30,12 @@ import type { ProductsStackParamList } from "../navigation/ProductsStackNavigato
 type RouteProps = RouteProp<ProductsStackParamList, "AddEditTyreListing">;
 type Colors = typeof LIGHT_COLORS;
 
-const CONDITIONS = ["NEW", "USED", "REFURBISHED"] as const;
+const CONDITIONS = ["NEW", "USED"] as const;
 type Condition = (typeof CONDITIONS)[number];
 
 const CONDITION_LABEL: Record<Condition, string> = {
   NEW: "New",
   USED: "Used",
-  REFURBISHED: "Refurbished",
 };
 
 // Ghanaian vendors pick the kind of tyre, not an exact product name — this maps
@@ -76,7 +75,9 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
     })();
   }, []);
 
-  const brandNames = catalog.map((b) => b.brandName);
+  const brandNames = catalog
+    .map((b) => b.brandName)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
   async function pickPhoto(): Promise<void> {
     if (photos.length >= 4) {
@@ -114,6 +115,7 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
     const priceGhs = parseInt(price, 10);
     if (!priceGhs || priceGhs <= 0) { Alert.alert("Please enter a valid price"); return; }
     if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
+    if (photos.filter(Boolean).length === 0) { Alert.alert("Please add at least one photo of the tyre"); return; }
 
     setSaving(true);
     try {

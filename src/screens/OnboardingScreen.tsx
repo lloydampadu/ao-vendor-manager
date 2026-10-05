@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
-import { PART_CATEGORIES, CATEGORY_ICONS } from "@/lib/parts-catalog";
+import { PART_CATEGORIES, CATEGORY_ICONS, TYRES_SPECIALTY, isTyreVendor } from "@/lib/parts-catalog";
 import { ReusableText, HeightSpacer } from "../../components";
 import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -29,13 +29,24 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
   const { vendor, setVendor } = useAuthStore();
 
   const [selected, setSelected] = useState<Set<string>>(
-    new Set(vendor?.specialties ?? [])
+    // Never seed the tyres marker into the parts set — tyres is its own mode.
+    new Set((vendor?.specialties ?? []).filter((s) => s !== TYRES_SPECIALTY))
   );
+  const [tyres, setTyres] = useState<boolean>(isTyreVendor(vendor?.specialties));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Tyres and car parts are mutually exclusive: picking one clears the other.
+  const toggleTyres = useCallback(() => {
+    setTyres((prev) => {
+      if (!prev) setSelected(new Set());
+      return !prev;
+    });
+  }, []);
+
   const toggleItem = useCallback((item: string) => {
+    setTyres(false);
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(item) ? next.delete(item) : next.add(item);
@@ -53,6 +64,7 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
 
   const toggleAll = useCallback((category: string) => {
     const parts = PART_CATEGORIES[category] ?? [];
+    setTyres(false);
     setSelected((prev) => {
       const next = new Set(prev);
       const allSelected = parts.every((p) => next.has(p));
@@ -86,20 +98,31 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
       }));
 
   async function save() {
-    if (selected.size === 0) {
-      Alert.alert("Select at least one part you sell");
+    if (!tyres && selected.size === 0) {
+      Alert.alert("Select what you sell to continue");
       return;
     }
     setSaving(true);
     try {
-      const specialties = Array.from(selected);
+      const specialties = tyres ? [TYRES_SPECIALTY] : Array.from(selected);
       const { specialties: saved, categories } = await api.patch<{
         specialties: string[];
         categories: string[];
       }>("/vendor-auth/specialties", { specialties });
-      if (vendor) {
-        setVendor({ ...vendor, specialties: saved, categories });
+
+      if (tyres) {
+        // Tyres fit all cars, so brands don't apply — set "ALL" and skip the
+        // brands step, going straight into the app.
+        const { brands } = await api.patch<{ brands: string[] }>(
+          "/vendor-auth/brands",
+          { brands: ["ALL"] }
+        );
+        if (vendor) setVendor({ ...vendor, specialties: saved, categories, brands });
+        navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+        return;
       }
+
+      if (vendor) setVendor({ ...vendor, specialties: saved, categories });
       navigation.navigate("OnboardingBrands");
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Could not save");
@@ -109,6 +132,7 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
   }
 
   const totalSelected = selected.size;
+  const canContinue = tyres || totalSelected > 0;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.offwhite }]}>
@@ -116,7 +140,7 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
         <ReusableText text="What do you sell?" family="bold" size={22} color={C.secondary} />
         <HeightSpacer height={4} />
         <ReusableText
-          text="Pick all the parts you sell. Only pick what you actually have."
+          text="Sell tyres, or pick the car parts you sell — one or the other, not both."
           family="regular"
           size={13}
           color={C.gray2}
@@ -141,6 +165,28 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
         keyExtractor={(item) => item.item}
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <TouchableOpacity
+            style={[
+              styles.tyresCard,
+              { backgroundColor: C.white, borderColor: tyres ? C.primary : C.gray },
+              tyres && { backgroundColor: C.primary1 },
+            ]}
+            onPress={toggleTyres}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.catIcon, { backgroundColor: tyres ? C.primary : C.gray }]}>
+              <Ionicons name="car-sport-outline" size={18} color={C.white} />
+            </View>
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <ReusableText text="Tyres" family="bold" size={15} color={C.secondary} />
+              <ReusableText text="I sell tyres (not car parts)" family="regular" size={12} color={C.gray2} />
+            </View>
+            <View style={[styles.checkbox, tyres && { backgroundColor: C.primary, borderColor: C.primary }]}>
+              {tyres && <Ionicons name="checkmark" size={13} color={C.white} />}
+            </View>
+          </TouchableOpacity>
+        }
         renderSectionHeader={({ section }) => {
           const isOpen = lowerSearch ? true : expanded.has(section.title);
           const count = (PART_CATEGORIES[section.title] ?? []).filter((p) =>
@@ -233,13 +279,21 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: C.white, borderTopColor: C.gray }]}>
         <TouchableOpacity
-          style={[styles.saveBtn, { backgroundColor: C.primary }, (saving || totalSelected === 0) && styles.saveBtnDisabled]}
+          style={[styles.saveBtn, { backgroundColor: C.primary }, (saving || !canContinue) && styles.saveBtnDisabled]}
           onPress={() => void save()}
-          disabled={saving || totalSelected === 0}
+          disabled={saving || !canContinue}
           activeOpacity={0.85}
         >
           <ReusableText
-            text={saving ? "Saving…" : totalSelected === 0 ? "Select parts to continue" : `Save ${totalSelected} part${totalSelected === 1 ? "" : "s"}`}
+            text={
+              saving
+                ? "Saving…"
+                : tyres
+                ? "Continue with Tyres"
+                : totalSelected === 0
+                ? "Select what you sell to continue"
+                : `Save ${totalSelected} part${totalSelected === 1 ? "" : "s"}`
+            }
             family="bold"
             size={16}
             color={C.white}
@@ -273,6 +327,17 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   list: { paddingBottom: 16 },
+  tyresCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    ...SHADOWS.small,
+  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",

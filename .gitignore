@@ -5,3 +5,4 @@ ios/
 dist/
 .env
 google-services.json
+.superpowers/

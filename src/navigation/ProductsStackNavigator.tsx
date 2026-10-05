@@ -6,6 +6,8 @@ import AddPartWizardScreen from "../screens/AddPartWizardScreen";
 import TyreListingsScreen from "../screens/TyreListingsScreen";
 import AddEditTyreListingScreen from "../screens/AddEditTyreListingScreen";
 import type { TyreListing } from "@/lib/db";
+import { isTyreVendor } from "@/lib/parts-catalog";
+import { useAuthStore } from "@/store/auth-store";
 import { useThemeColors } from "../../constants/theme";
 
 export type ProductsStackParamList = {
@@ -20,8 +22,13 @@ const Stack = createNativeStackNavigator<ProductsStackParamList>();
 
 export default function ProductsStackNavigator(): React.JSX.Element {
   const C = useThemeColors();
+  const vendor = useAuthStore((s) => s.vendor);
+  // Tyre sellers manage tyres, not car parts — land them straight on their
+  // tyre listings so they never hit the parts screen.
+  const initialRoute = isTyreVendor(vendor?.specialties) ? "TyreListings" : "ProductsList";
   return (
     <Stack.Navigator
+      initialRouteName={initialRoute}
       screenOptions={{
         headerStyle: { backgroundColor: C.white },
         headerTintColor: C.black,

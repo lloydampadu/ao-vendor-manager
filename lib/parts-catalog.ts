@@ -34,6 +34,15 @@ export const PART_CATEGORIES: Record<string, string[]> = {
   ],
 };
 
+// A vendor sells EITHER tyres OR car parts, never both. When a vendor picks
+// tyres during onboarding we store this single marker as their specialty.
+export const TYRES_SPECIALTY = "Tyres";
+
+// True when the vendor onboarded as a tyre seller (see TYRES_SPECIALTY).
+export function isTyreVendor(specialties?: string[] | null): boolean {
+  return !!specialties?.includes(TYRES_SPECIALTY);
+}
+
 export const CATEGORY_ICONS: Record<string, string> = {
   "Air & Fuel":           "flame-outline",
   "Axle & Brakes":        "disc-outline",
