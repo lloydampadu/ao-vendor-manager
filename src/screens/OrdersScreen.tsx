@@ -3,6 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "re
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getOrders, type Order } from "@/lib/db";
 import { parseJson } from "@/lib/assignment-status";
+import { earningsSummary, payoutLabel } from "@/lib/mappers";
 import { useSyncedQuery, usePullToRefresh } from "@/hooks/useSyncedQuery";
 import { ReusableText, HeightSpacer, InboxSkeletonList, NetworkImage, EmptyState } from "../../components";
 import { vehicleLabel } from "../../components/RequestCard";
@@ -30,12 +31,23 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
 
   if (loading) return <View style={{ flex: 1, backgroundColor: C.offwhite }}><InboxSkeletonList /></View>;
 
+  const summary = earningsSummary(orders);
+
   return (
     <FlatList
       style={{ backgroundColor: C.offwhite }}
       data={orders}
       keyExtractor={(o) => o.id}
       contentContainerStyle={styles.list}
+      ListHeaderComponent={
+        orders.length > 0 ? (
+          <View style={[styles.summary, { backgroundColor: C.white, borderColor: C.gray }]}>
+            <SummaryCell label="Earned" value={summary.earnedGhs} color={C.secondary} />
+            <SummaryCell label="Paid to you" value={summary.paidGhs} color={C.green} />
+            <SummaryCell label="Owed to you" value={summary.owedGhs} color={summary.owedGhs > 0 ? C.primary : C.gray2} />
+          </View>
+        ) : null
+      }
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={C.primary} />}
       ListEmptyComponent={<EmptyState icon="receipt-outline" title="No paid orders yet" subtitle="When a customer pays for a quote you won, it shows up here with pickup instructions." />}
       renderItem={({ item }) => {
@@ -45,6 +57,8 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
         const car = vehicleLabel(req);
         const stageLabel = STAGE_LABEL[item.stage] ?? item.stage;
         const done = item.stage === "HANDED_OVER";
+        const payout = payoutLabel(item);
+        const payoutColor = payout.tone === "paid" ? C.green : payout.tone === "owed" ? C.primary : C.gray2;
         return (
           <TouchableOpacity
             style={[styles.card, { backgroundColor: C.white, borderColor: C.gray }]}
@@ -63,6 +77,8 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
                     <ReusableText text={stageLabel} family="medium" size={SIZES.small} color={done ? C.gray2 : C.primary} />
                   </View>
                 </View>
+                <HeightSpacer height={4} />
+                <ReusableText text={payout.text} family={payout.tone === "owed" ? "medium" : "regular"} size={11} color={payoutColor} />
               </View>
             </View>
           </TouchableOpacity>
@@ -72,8 +88,20 @@ export default function OrdersScreen({ navigation }: Props): React.JSX.Element {
   );
 }
 
+function SummaryCell({ label, value, color }: { label: string; value: number; color: string }) {
+  const C = useThemeColors();
+  return (
+    <View style={styles.summaryCell}>
+      <ReusableText text={label} family="regular" size={11} color={C.gray2} />
+      <ReusableText text={`GHS ${value.toLocaleString()}`} family="bold" size={SIZES.medium} color={color} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   list: { padding: 12, gap: 10, flexGrow: 1 },
+  summary: { flexDirection: "row", borderRadius: 12, borderWidth: 1, padding: 12, gap: 8 },
+  summaryCell: { flex: 1, gap: 2 },
   card: { padding: 14, borderRadius: 12, borderWidth: 1 },
   cardRow: { flexDirection: "row", gap: 12, alignItems: "center" },
   cardBody: { flex: 1 },

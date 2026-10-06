@@ -1,4 +1,4 @@
-import { mapAssignment, mapLight, mapOrder, mapTyre, mergeAssignment, type ApiAssignment } from "@/lib/mappers";
+import { earningsSummary, mapAssignment, mapLight, mapOrder, mapTyre, mergeAssignment, payoutLabel, type ApiAssignment } from "@/lib/mappers";
 import type { Assignment } from "@/lib/db";
 
 const serverAssignment: ApiAssignment = {
@@ -59,6 +59,28 @@ describe("listing mappers", () => {
 
   it("maps orders with a stable updated_at supplied by the caller", () => {
     const row = mapOrder({ id: "o1", fulfillmentStage: "TO_BRING", handedOverAt: null, handoverPhotos: [], request: { partName: "X" }, wonItems: [], totalEarnGhs: 120 }, "now");
-    expect(row).toMatchObject({ id: "o1", stage: "TO_BRING", total_earn_ghs: 120, updated_at: "now", handover_photos: "[]" });
+    expect(row).toMatchObject({ id: "o1", stage: "TO_BRING", total_earn_ghs: 120, updated_at: "now", handover_photos: "[]", payout_status: "UNPAID", payout_method: null });
+  });
+
+  it("maps payout fields when the API sends them", () => {
+    const row = mapOrder({ id: "o1", fulfillmentStage: "HANDED_OVER", handedOverAt: "t", handoverPhotos: [], request: {}, wonItems: [], totalEarnGhs: 120,
+      payout: { status: "PAID", method: "MOMO", amountGhs: 120, paidAt: "2026-10-06T10:00:00Z", reference: "MP123" } }, "now");
+    expect(row).toMatchObject({ payout_status: "PAID", payout_method: "MOMO", payout_amount_ghs: 120, payout_ref: "MP123" });
+  });
+});
+
+describe("payout helpers", () => {
+  it("sums earned, paid and owed (owed only once collected)", () => {
+    expect(earningsSummary([
+      { total_earn_ghs: 100, payout_status: "PAID", payout_amount_ghs: 90, stage: "HANDED_OVER" },
+      { total_earn_ghs: 50, payout_status: "UNPAID", payout_amount_ghs: null, stage: "HANDED_OVER" },
+      { total_earn_ghs: 70, payout_status: "UNPAID", payout_amount_ghs: null, stage: "TO_BRING" },
+    ])).toEqual({ earnedGhs: 220, paidGhs: 90, owedGhs: 50 });
+  });
+
+  it("labels payout state for the vendor", () => {
+    expect(payoutLabel({ payout_status: "UNPAID", payout_method: null, payout_at: null, stage: "TO_BRING" })).toEqual({ text: "Paid after collection", tone: "muted" });
+    expect(payoutLabel({ payout_status: "UNPAID", payout_method: null, payout_at: null, stage: "HANDED_OVER" })).toEqual({ text: "Payout pending", tone: "owed" });
+    expect(payoutLabel({ payout_status: "PAID", payout_method: "CASH", payout_at: null, stage: "HANDED_OVER" })).toEqual({ text: "Paid by cash", tone: "paid" });
   });
 });

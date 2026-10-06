@@ -4,6 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { applyLocalStage, enqueueStage, getOrder, type Order } from "@/lib/db";
 import { parseJson } from "@/lib/assignment-status";
+import { payoutLabel } from "@/lib/mappers";
 import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_E164 } from "@/constants/support";
 import { useSyncStore } from "@/store/sync-store";
 import { useSyncedQuery } from "@/hooks/useSyncedQuery";
@@ -137,6 +138,23 @@ export default function OrderDetailScreen({ route, navigation }: Props): React.J
         <ReusableText text="You earn" family="medium" size={SIZES.medium} color={C.black} />
         <ReusableText text={`GHS ${order.total_earn_ghs.toLocaleString()}`} family="bold" size={SIZES.medium} color={C.primary} />
       </View>
+      <HeightSpacer height={6} />
+      {(() => {
+        const payout = payoutLabel(order);
+        const color = payout.tone === "paid" ? C.green : payout.tone === "owed" ? C.primary : C.gray2;
+        return (
+          <View style={[styles.payoutBox, { borderColor: color, backgroundColor: payout.tone === "paid" ? "#f0fdf4" : C.white }]}>
+            <ReusableText text={payout.text} family="medium" size={SIZES.small} color={color} />
+            {order.payout_status === "PAID" && order.payout_amount_ghs != null && order.payout_amount_ghs !== order.total_earn_ghs ? (
+              <ReusableText text={`Amount paid: GHS ${order.payout_amount_ghs.toLocaleString()}`} family="regular" size={11} color={C.gray2} />
+            ) : null}
+            {order.payout_ref ? <ReusableText text={`Ref: ${order.payout_ref}`} family="regular" size={11} color={C.gray2} /> : null}
+            {payout.tone === "owed" ? (
+              <ReusableText text={`We pay by MoMo or cash after collection. Questions? Call ${SUPPORT_PHONE_DISPLAY}.`} family="regular" size={11} color={C.gray2} />
+            ) : null}
+          </View>
+        );
+      })()}
 
       <HeightSpacer height={24} />
       {order.stage === "HANDED_OVER" ? (
@@ -163,4 +181,5 @@ const styles = StyleSheet.create({
   condChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
   photoRow: { paddingVertical: 10 },
   callRow: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  payoutBox: { borderWidth: 1, borderRadius: 10, padding: 10, gap: 2 },
 });
