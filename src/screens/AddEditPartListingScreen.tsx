@@ -16,6 +16,7 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import { uploadImage } from "@/lib/upload";
 import { PART_CATEGORIES } from "@/lib/parts-catalog";
 import { vehicleApi, api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth-store";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
@@ -115,11 +116,21 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const nav = useNavigation();
   const route = useRoute<RouteProps>();
   const category = route.params.category;
-  const config: CategoryConfig = CATEGORY_CONFIG[category] ?? {
+  const vendor = useAuthStore((s) => s.vendor);
+  const baseConfig: CategoryConfig = CATEGORY_CONFIG[category] ?? {
     allTypes: [],
     primaryTypes: [],
     hasSide: false,
     hasPosition: false,
+  };
+
+  // If the vendor has specialties that belong to this category, show those as
+  // the primary chips instead of the hardcoded defaults.
+  const categorySet = new Set(baseConfig.allTypes);
+  const specialtyChips = (vendor?.specialties ?? []).filter((s) => categorySet.has(s));
+  const config: CategoryConfig = {
+    ...baseConfig,
+    primaryTypes: specialtyChips.length > 0 ? specialtyChips : baseConfig.primaryTypes,
   };
 
   const [partType, setPartType] = useState("");
