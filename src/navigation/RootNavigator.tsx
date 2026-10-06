@@ -35,10 +35,14 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator(): React.JSX.Element {
   const status = useAuthStore((s) => s.status);
   const vendor = useAuthStore((s) => s.vendor);
+  const onboardingStep = useAuthStore((s) => s.onboardingStep);
 
   const signedIn = status === "signedIn";
+  // A vendor set up by admin already has specialties and skips onboarding
+  // entirely. Brands are only asked right after a self-onboarding vendor picks
+  // their parts; an empty brands list otherwise means "all brands".
   const needsSpecialties = signedIn && !!vendor && vendor.specialties.length === 0;
-  const needsBrands = signedIn && !!vendor && !needsSpecialties && vendor.brands.length === 0;
+  const needsBrands = signedIn && !!vendor && !needsSpecialties && onboardingStep === "brands";
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

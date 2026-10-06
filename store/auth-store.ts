@@ -49,6 +49,11 @@ export type AuthStatus = "loading" | "signedOut" | "signedIn";
 type AuthState = {
   status: AuthStatus;
   vendor: Vendor | null;
+  /** Transient first-run step after the vendor picks what they sell. Not persisted:
+   *  an empty brands list means "all brands" (same as the admin panel), so it
+   *  can't be used to decide whether the step is still needed. */
+  onboardingStep: "brands" | null;
+  setOnboardingStep: (step: "brands" | null) => void;
   /** Restores the session from secure storage. Resolves as soon as the cached
    *  profile is available; the network refresh continues in the background. */
   hydrate: () => Promise<void>;
@@ -63,6 +68,8 @@ type AuthState = {
 export const useAuthStore = create<AuthState>((set, get) => ({
   status: "loading",
   vendor: null,
+  onboardingStep: null,
+  setOnboardingStep: (onboardingStep) => set({ onboardingStep }),
 
   hydrate: async () => {
     try {
@@ -129,7 +136,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     if (get().status === "signedOut") return;
-    set({ status: "signedOut", vendor: null });
+    set({ status: "signedOut", vendor: null, onboardingStep: null });
     // Let any in-flight sync finish, wipe local data, and only then drop the
     // token — so an interrupted sign-out can never leave another vendor's data
     // behind for the next sign-in (a leftover token just repeats the wipe).

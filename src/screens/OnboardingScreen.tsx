@@ -24,6 +24,7 @@ export default function OnboardingScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const vendor = useAuthStore((s) => s.vendor);
   const setVendor = useAuthStore((s) => s.setVendor);
+  const setOnboardingStep = useAuthStore((s) => s.setOnboardingStep);
 
   const [selected, setSelected] = useState<Set<string>>(
     // Never seed the tyres marker into the parts set — tyres is its own mode.
@@ -104,11 +105,12 @@ export default function OnboardingScreen(): React.JSX.Element {
       const specialties = tyres ? [TYRES_SPECIALTY] : Array.from(selected);
       const { specialties: saved, categories } = await vendorAuthApi.setSpecialties(specialties);
 
-      // Tyres fit all cars, so brands don't apply — set "ALL" so the navigator
-      // skips the brands step and goes straight into the app.
-      const brands = tyres ? (await vendorAuthApi.setBrands(["ALL"])).brands : vendor?.brands ?? [];
-      // Updating the store moves the navigator to the next step (brands or main).
+      // Tyres fit all cars, so brands don't apply: an empty list means "all
+      // brands" (same convention as the admin panel) and we skip the step.
+      const brands = tyres ? (await vendorAuthApi.setBrands([])).brands : vendor?.brands ?? [];
       if (vendor) setVendor({ ...vendor, specialties: saved, categories, brands });
+      // Parts vendors pick their brands next; the navigator reacts to this flag.
+      setOnboardingStep(tyres ? null : "brands");
     } catch (e) {
       Alert.alert("Couldn't save", errorMessage(e));
     } finally {
