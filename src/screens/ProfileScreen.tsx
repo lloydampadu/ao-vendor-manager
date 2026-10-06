@@ -54,7 +54,8 @@ export default function ProfileScreen(): React.JSX.Element {
   const specialtiesLabel = vendor?.specialties.length
     ? vendor.specialties.length > 3 ? `${vendor.specialties.slice(0, 3).join(", ")} +${vendor.specialties.length - 3} more` : vendor.specialties.join(", ")
     : null;
-  const brandsLabel = vendor?.brands.includes("ALL") ? "All brands" : vendor?.brands.join(", ") || null;
+  const realBrands = (vendor?.brands ?? []).filter((b) => b.toLowerCase() !== "all");
+  const brandsLabel = realBrands.length === 0 ? "All brands" : realBrands.join(", ");
   const version = Constants.expoConfig?.version ?? "";
 
   return (

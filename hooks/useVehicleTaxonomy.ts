@@ -26,7 +26,7 @@ export function useMakes(restrictTo?: string[]) {
   useEffect(() => {
     let cancelled = false;
     const apply = (all: string[]) => {
-      const wanted = (restrictTo ?? []).filter((b) => b !== "ALL");
+      const wanted = (restrictTo ?? []).filter((b) => b.toLowerCase() !== "all");
       const list = wanted.length > 0
         ? all.filter((m) => wanted.some((b) => b.toLowerCase() === m.toLowerCase()))
         : all;

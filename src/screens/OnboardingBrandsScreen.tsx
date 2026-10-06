@@ -15,9 +15,14 @@ export default function OnboardingBrandsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const vendor = useAuthStore((s) => s.vendor);
   const setVendor = useAuthStore((s) => s.setVendor);
+  const setOnboardingStep = useAuthStore((s) => s.setOnboardingStep);
   const { makes, loading: makesLoading } = useMakes();
 
-  const [selected, setSelected] = useState<Set<string>>(new Set(vendor?.brands ?? []));
+  // Empty list on the server means "all brands"; show that as the ALL choice.
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    const existing = (vendor?.brands ?? []).filter((b) => b.toLowerCase() !== "all");
+    return existing.length === 0 ? new Set([ALL]) : new Set(existing);
+  });
   const [saving, setSaving] = useState(false);
 
   const allBrands = selected.has(ALL);
@@ -42,9 +47,11 @@ export default function OnboardingBrandsScreen(): React.JSX.Element {
     }
     setSaving(true);
     try {
-      const { brands } = await vendorAuthApi.setBrands(Array.from(selected));
-      // Updating the store moves the navigator on to the main app.
+      // "All brands" is stored as an empty list, matching routing and the admin panel.
+      const toSave = allBrands ? [] : Array.from(selected);
+      const { brands } = await vendorAuthApi.setBrands(toSave);
       if (vendor) setVendor({ ...vendor, brands });
+      setOnboardingStep(null); // navigator moves on to the main app
     } catch (e) {
       Alert.alert("Couldn't save", errorMessage(e));
     } finally {
