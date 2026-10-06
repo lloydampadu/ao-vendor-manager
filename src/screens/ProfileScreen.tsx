@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -8,6 +8,10 @@ import { useAuthStore } from "../../store/auth-store";
 import { api } from "@/lib/api";
 import { uploadImage } from "@/lib/upload";
 import { Card, ReusableBtn, ReusableText, HeightSpacer, NetworkImage } from "../../components";
+import { Ionicons } from "@expo/vector-icons";
+
+const SUPPORT_PHONE = "+233506221697";
+const SUPPORT_DISPLAY = "050 622 1697";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -102,6 +106,20 @@ export default function ProfileScreen(): React.JSX.Element {
 
         <HeightSpacer height={16} />
 
+        <TouchableOpacity
+          style={[styles.supportRow, { backgroundColor: C.white, borderColor: C.gray }]}
+          onPress={() => Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() => Alert.alert("Couldn't open dialer", `Call us on ${SUPPORT_DISPLAY}`))}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="call-outline" size={18} color={C.primary} />
+          <View style={{ marginLeft: 10 }}>
+            <ReusableText text="Need help? Call us" family="medium" size={SIZES.small} color={C.secondary} />
+            <ReusableText text={SUPPORT_DISPLAY} family="regular" size={SIZES.small} color={C.primary} />
+          </View>
+        </TouchableOpacity>
+
+        <HeightSpacer height={12} />
+
         <ReusableBtn
           onPress={logout}
           btnText="Log out"
@@ -125,4 +143,5 @@ const styles = StyleSheet.create({
   avatarWrap: { alignItems: "center", gap: 10 },
   avatarPlaceholder: { width: 96, height: 96, borderRadius: 48, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   changePhoto: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  supportRow: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 10, borderWidth: 1 },
 });
