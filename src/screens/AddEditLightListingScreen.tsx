@@ -19,6 +19,7 @@ import type { LightListing } from "@/lib/db";
 import { PART_CATEGORIES } from "@/lib/parts-catalog";
 import { vehicleApi } from "@/lib/api";
 import { useSyncStore } from "@/store/sync-store";
+import { useAuthStore } from "@/store/auth-store";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
@@ -64,6 +65,7 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
   const route = useRoute<RouteProps>();
   const existing = route.params?.listing as LightListing | undefined;
   const { startSync } = useSyncStore();
+  const vendor = useAuthStore((s) => s.vendor);
 
   const existingPhotos: string[] = (() => {
     try { return existing ? (JSON.parse(existing.photos) as string[]) : []; } catch { return []; }
@@ -94,12 +96,20 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
   const [showYearPicker, setShowYearPicker] = useState(false);
 
   useEffect(() => {
+    const vendorBrands = vendor?.brands ?? [];
     setMakesLoading(true);
     vehicleApi.getMakes()
-      .then((res) => setMakes(res.makes))
-      .catch(() => { /* offline — vendor can still type if needed */ })
+      .then((res) => {
+        const all = res.makes;
+        setMakes(
+          vendorBrands.length > 0
+            ? all.filter((m) => vendorBrands.some((b) => b.toLowerCase() === m.toLowerCase()))
+            : all
+        );
+      })
+      .catch(() => { /* offline */ })
       .finally(() => setMakesLoading(false));
-  }, []);
+  }, [vendor?.brands]);
 
   useEffect(() => {
     if (!make) { setModels([]); return; }

@@ -102,12 +102,20 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const [showYearPicker, setShowYearPicker] = useState(false);
 
   useEffect(() => {
+    const vendorBrands = vendor?.brands ?? [];
     setMakesLoading(true);
     vehicleApi.getMakes()
-      .then((res) => setMakes(res.makes))
+      .then((res) => {
+        const all = res.makes;
+        setMakes(
+          vendorBrands.length > 0
+            ? all.filter((m) => vendorBrands.some((b) => b.toLowerCase() === m.toLowerCase()))
+            : all
+        );
+      })
       .catch(() => { /* offline */ })
       .finally(() => setMakesLoading(false));
-  }, []);
+  }, [vendor?.brands]);
 
   useEffect(() => {
     if (!make) { setModels([]); return; }
