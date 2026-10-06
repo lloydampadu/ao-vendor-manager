@@ -1,3 +1,5 @@
+import type { Ionicons } from "@expo/vector-icons";
+
 export const PART_CATEGORIES: Record<string, string[]> = {
   "Air & Fuel": [
     "A/C Bracket","A/C Compressor","A/C Compressor Clutch Only","A/C Condenser","A/C Condenser Fan","A/C Control Computer","A/C Evaporator","A/C Evaporator Housing only","A/C Heater Control (see also Radio or TV Screen)","A/C Hose","A/C Wiring Harness","Air Box/Air Cleaner","Air Cond./Heater Vents","Air Flow Meter","Air Pump","Air Shutter","Air Tube/Resonator","Cabin Air Filter","Carburetor (see also Throttle Body)","EGR Valve","Engine Air Filter","Fuel Cap","Fuel Cell","Fuel Cooler","Fuel Distributor (& Misc. Injection)","Fuel Filler Door","Fuel Filler Neck","Fuel Gauge","Fuel Injector (& Misc. Injection)","Fuel Injector Pump","Fuel Injector Rail","Fuel Line","Fuel Pump","Fuel Tank","Fuel Tank Sending Unit","Gas Cap","Gas Tank","Intake Manifold","Intercooler","Intercooler Pipe","Throttle Body/Throttle Valve Housing","Vacuum Pump","Vacuum Storage Tank","Vapor Canister",
@@ -58,7 +60,7 @@ export function isLightVendor(specialties?: string[] | null, categories?: string
   return specialties.every((s) => LAMPS_PARTS.has(s));
 }
 
-export const CATEGORY_ICONS: Record<string, string> = {
+export const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "Air & Fuel":           "flame-outline",
   "Axle & Brakes":        "disc-outline",
   "Body":                 "car-outline",
@@ -71,3 +73,17 @@ export const CATEGORY_ICONS: Record<string, string> = {
   "Steering & Suspension":"git-branch-outline",
   "Transmission":         "swap-horizontal-outline",
 };
+
+// The server's VendorCategory enum still carries legacy values from before the
+// per-category split. Map them onto the current ones so tile filters and
+// "what do you sell" logic treat old and new vendors the same.
+const LEGACY_VENDOR_CATEGORY: Record<string, string> = {
+  ENGINE_PARTS: "ENGINE",
+  BODY_PARTS: "BODY",
+  ELECTRICALS: "ELECTRICAL",
+  SUSPENSION: "STEERING_SUSPENSION",
+};
+
+export function normaliseVendorCategory(category: string): string {
+  return LEGACY_VENDOR_CATEGORY[category] ?? category;
+}

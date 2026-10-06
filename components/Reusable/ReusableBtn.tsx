@@ -1,4 +1,4 @@
-import { StyleSheet, Text, TouchableOpacity, DimensionValue } from "react-native";
+import { Text, TouchableOpacity, type DimensionValue } from "react-native";
 import React from "react";
 import { SIZES } from "../../constants/theme";
 
@@ -13,6 +13,7 @@ type Props = {
   fontSize?: number;
   height?: number;
   borderRadius?: number;
+  disabled?: boolean;
 };
 
 const ReusableBtn = ({
@@ -26,10 +27,14 @@ const ReusableBtn = ({
   fontSize = SIZES.medium,
   height = 50,
   borderRadius = 12,
+  disabled = false,
 }: Props) => {
   return (
     <TouchableOpacity
       onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
       style={{
         width: width as DimensionValue,
         backgroundColor,
@@ -39,13 +44,12 @@ const ReusableBtn = ({
         borderRadius,
         borderColor,
         borderWidth,
+        flexShrink: 1,
       }}
     >
-      <Text style={{ fontFamily: "medium", fontSize, color: textColor }}>{btnText}</Text>
+      <Text style={{ fontFamily: "medium", fontSize, color: textColor }} numberOfLines={1}>{btnText}</Text>
     </TouchableOpacity>
   );
 };
 
 export default ReusableBtn;
-
-const styles = StyleSheet.create({});

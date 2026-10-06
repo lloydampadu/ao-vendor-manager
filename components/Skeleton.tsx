@@ -132,32 +132,6 @@ export function RequestDetailSkeleton() {
   );
 }
 
-export function QuoteItemSkeleton() {
-  return (
-    <SkeletonCard>
-      <View style={styles.row}>
-        <SkeletonBox width="55%" height={15} borderRadius={5} />
-        <SkeletonBox width={64} height={22} borderRadius={10} />
-      </View>
-      <View style={{ height: 8 }} />
-      <SkeletonBox width="40%" height={12} borderRadius={4} />
-    </SkeletonCard>
-  );
-}
-
-export function QuotesSkeletonList() {
-  return (
-    <View style={styles.listPad}>
-      {[0, 1, 2, 3].map((i) => (
-        <React.Fragment key={i}>
-          <QuoteItemSkeleton />
-          <View style={{ height: 10 }} />
-        </React.Fragment>
-      ))}
-    </View>
-  );
-}
-
 export function TyreItemSkeleton() {
   const C = useThemeColors();
   return (

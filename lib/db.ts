@@ -1,4 +1,9 @@
 import * as SQLite from "expo-sqlite";
+import { createLogger } from "./logger";
+
+const log = createLogger("db");
+
+// ─── Row types ───────────────────────────────────────────────────────────────
 
 export type Assignment = {
   id: string;
@@ -6,15 +11,15 @@ export type Assignment = {
   status: string;
   notified_at: string | null;
   updated_at: string;
-  request_data: string; // JSON blob
-  quote_data: string | null; // JSON blob
+  request_data: string; // JSON blob of the request
+  quote_data: string | null; // JSON blob of the vendor's quote (server shape or queued payload)
   fee_paid: number; // 1 if customer paid sourcing fee, 0 otherwise
 };
 
 export type QuoteQueueItem = {
   id: string;
   assignment_id: string;
-  payload: string; // JSON blob
+  payload: string; // JSON QuotePayload
   synced: number; // 0 or 1
   error: string | null;
   created_at: string;
@@ -23,7 +28,7 @@ export type QuoteQueueItem = {
 export type DeclineQueueItem = {
   id: string;
   assignment_id: string;
-  synced: number; // 0 or 1
+  synced: number;
   error: string | null;
   created_at: string;
 };
@@ -31,7 +36,7 @@ export type DeclineQueueItem = {
 export type Order = {
   id: string;
   stage: string;
-  won_items: string; // JSON: { partName; condition; earnGhs }[]
+  won_items: string; // JSON: { partName; condition; earnGhs; photos }[]
   total_earn_ghs: number;
   request_data: string; // JSON
   handed_over_at: string | null;
@@ -50,162 +55,318 @@ export type StageQueueItem = {
   created_at: string;
 };
 
-let _db: SQLite.SQLiteDatabase | null = null;
+export type TyreListing = {
+  id: string;
+  server_id: string | null; // null until synced to API
+  width: number;
+  height: number;
+  diameter: number;
+  brand: string;
+  model: string;
+  condition: string;
+  price_ghs: number;
+  photos: string; // JSON string[]
+  in_stock: number; // 0 or 1
+  updated_at: string;
+};
 
-async function getDb() {
-  if (!_db) _db = await SQLite.openDatabaseAsync("vendor.db");
-  return _db;
+export type LightListing = {
+  id: string;
+  server_id: string | null;
+  light_type: string;
+  side: string;
+  make: string;
+  model: string;
+  year: string;
+  condition: string;
+  price_ghs: number;
+  photos: string; // JSON string[]
+  in_stock: number;
+  updated_at: string;
+};
+
+export type ListingOp = "create" | "update" | "delete";
+
+export type ListingQueueItem = {
+  id: string;
+  op: ListingOp;
+  listing_id: string;
+  payload: string; // JSON blob
+  synced: number;
+  error: string | null;
+  created_at: string;
+};
+
+export type CatalogModel = { name: string; slug: string; type: string | null };
+export type CatalogBrand = {
+  brandName: string;
+  brandSlug: string;
+  tier: string;
+  models: CatalogModel[];
+};
+
+export type QuoteSyncStatus = "pending" | "synced" | "error";
+
+// ─── Connection + migrations ─────────────────────────────────────────────────
+//
+// The database opens once and migrates itself on first use, so every caller
+// (screens, sync, badge counts) can assume the schema exists. Migrations are
+// append-only and keyed by PRAGMA user_version; never edit a shipped step —
+// add a new one.
+
+const MIGRATIONS: string[] = [
+  // v1 — baseline schema (matches what shipped before versioning existed; every
+  // statement is IF NOT EXISTS so upgrading installs are a no-op here).
+  `
+  CREATE TABLE IF NOT EXISTS assignments (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    notified_at TEXT,
+    updated_at TEXT NOT NULL,
+    request_data TEXT NOT NULL,
+    quote_data TEXT,
+    fee_paid INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS quote_queue (
+    id TEXT PRIMARY KEY,
+    assignment_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS decline_queue (
+    id TEXT PRIMARY KEY,
+    assignment_id TEXT NOT NULL,
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS products_cache (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS tyre_catalog_cache (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    stage TEXT NOT NULL,
+    won_items TEXT NOT NULL,
+    total_earn_ghs INTEGER NOT NULL DEFAULT 0,
+    request_data TEXT NOT NULL,
+    handed_over_at TEXT,
+    handover_photos TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS stage_queue (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    photos TEXT NOT NULL DEFAULT '[]',
+    location TEXT,
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS tyre_listings (
+    id TEXT PRIMARY KEY,
+    server_id TEXT,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    diameter INTEGER NOT NULL,
+    brand TEXT NOT NULL,
+    model TEXT NOT NULL,
+    condition TEXT NOT NULL,
+    price_ghs INTEGER NOT NULL,
+    photos TEXT NOT NULL DEFAULT '[]',
+    in_stock INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS tyre_listing_queue (
+    id TEXT PRIMARY KEY,
+    op TEXT NOT NULL,
+    listing_id TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS light_listings (
+    id TEXT PRIMARY KEY,
+    server_id TEXT,
+    light_type TEXT NOT NULL,
+    side TEXT NOT NULL DEFAULT 'N/A',
+    make TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    year TEXT NOT NULL DEFAULT '',
+    condition TEXT NOT NULL,
+    price_ghs INTEGER NOT NULL,
+    photos TEXT NOT NULL DEFAULT '[]',
+    in_stock INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS light_listing_queue (
+    id TEXT PRIMARY KEY,
+    op TEXT NOT NULL,
+    listing_id TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  `,
+  // v2 — indexes for the hot queries (segment lists, queue flushes, badge count).
+  `
+  CREATE INDEX IF NOT EXISTS idx_assignments_status ON assignments(status, updated_at);
+  CREATE INDEX IF NOT EXISTS idx_quote_queue_synced ON quote_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_quote_queue_assignment ON quote_queue(assignment_id);
+  CREATE INDEX IF NOT EXISTS idx_decline_queue_synced ON decline_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_stage_queue_synced ON stage_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_orders_stage ON orders(stage);
+  CREATE INDEX IF NOT EXISTS idx_tyre_queue_synced ON tyre_listing_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_tyre_listings_server ON tyre_listings(server_id);
+  CREATE INDEX IF NOT EXISTS idx_light_queue_synced ON light_listing_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_light_listings_server ON light_listings(server_id);
+  `,
+];
+
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
+  const db = await SQLite.openDatabaseAsync("vendor.db");
+  await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+
+  // Installs that pre-date versioning have user_version 0 but already hold the
+  // v1 tables. The legacy fee_paid ALTER is tolerated because v1 is IF NOT EXISTS.
+  await db.execAsync("ALTER TABLE assignments ADD COLUMN fee_paid INTEGER NOT NULL DEFAULT 0").catch(() => {});
+
+  const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
+  let version = row?.user_version ?? 0;
+  for (let i = version; i < MIGRATIONS.length; i++) {
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.execAsync(MIGRATIONS[i]);
+      await tx.execAsync(`PRAGMA user_version = ${i + 1}`);
+    });
+    version = i + 1;
+    log.debug("migrated", { to: version });
+  }
+  return db;
 }
 
+export function getDb(): Promise<SQLite.SQLiteDatabase> {
+  if (!dbPromise) {
+    dbPromise = openAndMigrate().catch((err) => {
+      dbPromise = null; // allow a retry on the next call
+      throw err;
+    });
+  }
+  return dbPromise;
+}
+
+/** Opens the database and runs pending migrations. Safe to call many times. */
 export async function initDb(): Promise<void> {
+  await getDb();
+}
+
+/**
+ * Wipes every table. Called on logout so the next vendor to sign in on this
+ * phone never sees the previous vendor's requests, orders or listings.
+ */
+export async function clearAllData(): Promise<void> {
   const db = await getDb();
-  // Migrate existing installs that don't have fee_paid column yet.
-  await db.execAsync(`ALTER TABLE assignments ADD COLUMN fee_paid INTEGER NOT NULL DEFAULT 0`).catch(() => {});
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS assignments (
-      id TEXT PRIMARY KEY,
-      request_id TEXT NOT NULL,
-      status TEXT NOT NULL,
-      notified_at TEXT,
-      updated_at TEXT NOT NULL,
-      request_data TEXT NOT NULL,
-      quote_data TEXT,
-      fee_paid INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS quote_queue (
-      id TEXT PRIMARY KEY,
-      assignment_id TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      synced INTEGER DEFAULT 0,
-      error TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS decline_queue (
-      id TEXT PRIMARY KEY,
-      assignment_id TEXT NOT NULL,
-      synced INTEGER DEFAULT 0,
-      error TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS products_cache (
-      id TEXT PRIMARY KEY,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS tyre_catalog_cache (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS orders (
-      id TEXT PRIMARY KEY,
-      stage TEXT NOT NULL,
-      won_items TEXT NOT NULL,
-      total_earn_ghs INTEGER NOT NULL DEFAULT 0,
-      request_data TEXT NOT NULL,
-      handed_over_at TEXT,
-      handover_photos TEXT NOT NULL DEFAULT '[]',
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS stage_queue (
-      id TEXT PRIMARY KEY,
-      order_id TEXT NOT NULL,
-      stage TEXT NOT NULL,
-      photos TEXT NOT NULL DEFAULT '[]',
-      location TEXT,
-      synced INTEGER DEFAULT 0,
-      error TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS tyre_listings (
-      id TEXT PRIMARY KEY,
-      server_id TEXT,
-      width INTEGER NOT NULL,
-      height INTEGER NOT NULL,
-      diameter INTEGER NOT NULL,
-      brand TEXT NOT NULL,
-      model TEXT NOT NULL,
-      condition TEXT NOT NULL,
-      price_ghs INTEGER NOT NULL,
-      photos TEXT NOT NULL DEFAULT '[]',
-      in_stock INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS tyre_listing_queue (
-      id TEXT PRIMARY KEY,
-      op TEXT NOT NULL,
-      listing_id TEXT NOT NULL,
-      payload TEXT NOT NULL DEFAULT '{}',
-      synced INTEGER DEFAULT 0,
-      error TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS light_listings (
-      id TEXT PRIMARY KEY,
-      server_id TEXT,
-      light_type TEXT NOT NULL,
-      side TEXT NOT NULL DEFAULT 'N/A',
-      make TEXT NOT NULL DEFAULT '',
-      model TEXT NOT NULL DEFAULT '',
-      year TEXT NOT NULL DEFAULT '',
-      condition TEXT NOT NULL,
-      price_ghs INTEGER NOT NULL,
-      photos TEXT NOT NULL DEFAULT '[]',
-      in_stock INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS light_listing_queue (
-      id TEXT PRIMARY KEY,
-      op TEXT NOT NULL,
-      listing_id TEXT NOT NULL,
-      payload TEXT NOT NULL DEFAULT '{}',
-      synced INTEGER DEFAULT 0,
-      error TEXT,
-      created_at TEXT NOT NULL
-    );
-  `);
+  await db.withTransactionAsync(async () => {
+    for (const table of [
+      "assignments", "quote_queue", "decline_queue", "products_cache", "tyre_catalog_cache",
+      "orders", "stage_queue", "tyre_listings", "tyre_listing_queue", "light_listings", "light_listing_queue",
+    ]) {
+      await db.runAsync(`DELETE FROM ${table}`);
+    }
+  });
+}
+
+// ─── Assignments ─────────────────────────────────────────────────────────────
+
+const UPSERT_ASSIGNMENT_SQL = `
+  INSERT INTO assignments (id, request_id, status, notified_at, updated_at, request_data, quote_data, fee_paid)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET
+    status = excluded.status,
+    notified_at = excluded.notified_at,
+    updated_at = excluded.updated_at,
+    request_data = excluded.request_data,
+    quote_data = excluded.quote_data,
+    fee_paid = excluded.fee_paid`;
+
+function assignmentParams(a: Assignment): SQLite.SQLiteBindValue[] {
+  return [a.id, a.request_id, a.status, a.notified_at, a.updated_at, a.request_data, a.quote_data, a.fee_paid];
 }
 
 export async function upsertAssignment(a: Assignment): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    `INSERT INTO assignments (id, request_id, status, notified_at, updated_at, request_data, quote_data, fee_paid)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       status = excluded.status,
-       notified_at = excluded.notified_at,
-       updated_at = excluded.updated_at,
-       request_data = excluded.request_data,
-       quote_data = excluded.quote_data,
-       fee_paid = excluded.fee_paid`,
-    [a.id, a.request_id, a.status, a.notified_at, a.updated_at, a.request_data, a.quote_data, a.fee_paid],
-  );
+  await db.runAsync(UPSERT_ASSIGNMENT_SQL, assignmentParams(a));
 }
 
-export async function getAssignments(status?: string): Promise<Assignment[]> {
+export async function upsertAssignments(rows: Assignment[]): Promise<void> {
+  if (rows.length === 0) return;
   const db = await getDb();
-  if (status) {
+  await db.withTransactionAsync(async () => {
+    const stmt = await db.prepareAsync(UPSERT_ASSIGNMENT_SQL);
+    try {
+      for (const a of rows) await stmt.executeAsync(assignmentParams(a));
+    } finally {
+      await stmt.finalizeAsync();
+    }
+  });
+}
+
+export async function getAssignments(statuses?: string[]): Promise<Assignment[]> {
+  const db = await getDb();
+  if (statuses && statuses.length > 0) {
+    const placeholders = statuses.map(() => "?").join(",");
     return db.getAllAsync<Assignment>(
-      `SELECT * FROM assignments WHERE status = ? ORDER BY updated_at DESC`,
-      [status],
+      `SELECT * FROM assignments WHERE status IN (${placeholders}) ORDER BY updated_at DESC`,
+      statuses,
     );
   }
-  return db.getAllAsync<Assignment>(
-    `SELECT * FROM assignments ORDER BY updated_at DESC`,
-  );
+  return db.getAllAsync<Assignment>(`SELECT * FROM assignments ORDER BY updated_at DESC`);
 }
 
 export async function getAssignment(id: string): Promise<Assignment | null> {
   const db = await getDb();
-  return db.getFirstAsync<Assignment>(
-    `SELECT * FROM assignments WHERE id = ?`,
-    [id],
-  );
+  return db.getFirstAsync<Assignment>(`SELECT * FROM assignments WHERE id = ?`, [id]);
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`DELETE FROM assignments WHERE id = ?`, [id]);
 }
+
+/** Deletes assignments the server no longer returns (keeps any id in `keep`). */
+export async function pruneAssignments(keep: Set<string>): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string }>(`SELECT id FROM assignments`);
+  const gone = rows.map((r) => r.id).filter((id) => !keep.has(id));
+  if (gone.length === 0) return;
+  await db.withTransactionAsync(async () => {
+    for (const id of gone) await db.runAsync(`DELETE FROM assignments WHERE id = ?`, [id]);
+  });
+}
+
+export async function updateAssignmentStatus(id: string, status: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE assignments SET status = ? WHERE id = ?`, [status, id]);
+}
+
+export async function updateAssignmentQuote(id: string, quoteData: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE assignments SET status = 'QUOTED', quote_data = ? WHERE id = ?`, [quoteData, id]);
+}
+
+// ─── Quote queue ─────────────────────────────────────────────────────────────
 
 export async function enqueueQuote(q: QuoteQueueItem): Promise<void> {
   const db = await getDb();
@@ -217,20 +378,51 @@ export async function enqueueQuote(q: QuoteQueueItem): Promise<void> {
 
 export async function getPendingQuotes(): Promise<QuoteQueueItem[]> {
   const db = await getDb();
-  return db.getAllAsync<QuoteQueueItem>(
-    `SELECT * FROM quote_queue WHERE synced = 0 ORDER BY created_at ASC`,
-  );
+  return db.getAllAsync<QuoteQueueItem>(`SELECT * FROM quote_queue WHERE synced = 0 ORDER BY created_at ASC`);
 }
 
-export async function markQuoteSynced(id: string): Promise<void> {
+export async function markQuoteSynced(id: string, error: string | null = null): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`UPDATE quote_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+  await db.runAsync(`UPDATE quote_queue SET synced = 1, error = ? WHERE id = ?`, [error, id]);
 }
 
 export async function markQuoteError(id: string, error: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE quote_queue SET error = ? WHERE id = ?`, [error, id]);
 }
+
+export async function getQuoteQueueItem(assignment_id: string): Promise<QuoteQueueItem | null> {
+  const db = await getDb();
+  return db.getFirstAsync<QuoteQueueItem>(
+    `SELECT * FROM quote_queue WHERE assignment_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [assignment_id],
+  );
+}
+
+export function queueStatusOf(item: { synced: number; error: string | null }): QuoteSyncStatus {
+  return item.synced ? "synced" : item.error ? "error" : "pending";
+}
+
+export async function getAllQuoteQueueStatusMap(): Promise<Record<string, QuoteSyncStatus>> {
+  const db = await getDb();
+  const items = await db.getAllAsync<QuoteQueueItem>(`SELECT * FROM quote_queue ORDER BY created_at ASC`);
+  const map: Record<string, QuoteSyncStatus> = {};
+  // Latest row per assignment wins — the list is ordered oldest→newest.
+  for (const item of items) map[item.assignment_id] = queueStatusOf(item);
+  return map;
+}
+
+/** Assignment ids that have a local action (quote or decline) not yet accepted by the server. */
+export async function getAssignmentIdsWithPendingActions(): Promise<Set<string>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ assignment_id: string }>(
+    `SELECT assignment_id FROM quote_queue WHERE synced = 0
+     UNION SELECT assignment_id FROM decline_queue WHERE synced = 0`,
+  );
+  return new Set(rows.map((r) => r.assignment_id));
+}
+
+// ─── Decline queue ───────────────────────────────────────────────────────────
 
 export async function enqueueDecline(d: DeclineQueueItem): Promise<void> {
   const db = await getDb();
@@ -242,14 +434,12 @@ export async function enqueueDecline(d: DeclineQueueItem): Promise<void> {
 
 export async function getPendingDeclines(): Promise<DeclineQueueItem[]> {
   const db = await getDb();
-  return db.getAllAsync<DeclineQueueItem>(
-    `SELECT * FROM decline_queue WHERE synced = 0 ORDER BY created_at ASC`,
-  );
+  return db.getAllAsync<DeclineQueueItem>(`SELECT * FROM decline_queue WHERE synced = 0 ORDER BY created_at ASC`);
 }
 
-export async function markDeclineSynced(id: string): Promise<void> {
+export async function markDeclineSynced(id: string, error: string | null = null): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`UPDATE decline_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+  await db.runAsync(`UPDATE decline_queue SET synced = 1, error = ? WHERE id = ?`, [error, id]);
 }
 
 export async function markDeclineError(id: string, error: string): Promise<void> {
@@ -257,71 +447,27 @@ export async function markDeclineError(id: string, error: string): Promise<void>
   await db.runAsync(`UPDATE decline_queue SET error = ? WHERE id = ?`, [error, id]);
 }
 
-export type QuoteSyncStatus = "pending" | "synced" | "error";
+// ─── Products cache (generic parts are online-only; this is a read cache) ────
 
-export async function getQuoteQueueItem(assignment_id: string): Promise<QuoteQueueItem | null> {
-  const db = await getDb();
-  return db.getFirstAsync<QuoteQueueItem>(
-    `SELECT * FROM quote_queue WHERE assignment_id = ? ORDER BY created_at DESC LIMIT 1`,
-    [assignment_id],
-  );
-}
-
-export async function getAllQuoteQueueStatusMap(): Promise<Record<string, QuoteSyncStatus>> {
-  const db = await getDb();
-  const items = await db.getAllAsync<QuoteQueueItem>(`SELECT * FROM quote_queue`);
-  const map: Record<string, QuoteSyncStatus> = {};
-  for (const item of items) {
-    const status: QuoteSyncStatus = item.synced ? "synced" : item.error ? "error" : "pending";
-    const existing = map[item.assignment_id];
-    // pending beats error beats synced — show worst state if multiple rows
-    if (!existing || status === "pending" || (existing === "synced" && status === "error")) {
-      map[item.assignment_id] = status;
-    }
-  }
-  return map;
-}
-
-export async function updateAssignmentStatus(id: string, status: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(`UPDATE assignments SET status = ? WHERE id = ?`, [status, id]);
-}
-
-export async function updateAssignmentQuote(id: string, quoteData: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `UPDATE assignments SET status = 'QUOTED', quote_data = ? WHERE id = ?`,
-    [quoteData, id],
-  );
-}
-
-export async function cacheProducts(products: unknown[]): Promise<void> {
+export async function cacheProducts(products: { id: string }[]): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     await db.runAsync(`DELETE FROM products_cache`);
     for (const p of products) {
-      const row = p as { id: string };
-      await db.runAsync(
-        `INSERT INTO products_cache (id, data) VALUES (?, ?)`,
-        [row.id, JSON.stringify(p)],
-      );
+      await db.runAsync(`INSERT INTO products_cache (id, data) VALUES (?, ?)`, [p.id, JSON.stringify(p)]);
     }
   });
 }
 
 export async function getCachedProducts<T>(): Promise<T[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<{ id: string; data: string }>(`SELECT data FROM products_cache`);
-  return rows.map((r) => JSON.parse(r.data) as T);
+  const rows = await db.getAllAsync<{ data: string }>(`SELECT data FROM products_cache`);
+  return rows.flatMap((r) => {
+    try { return [JSON.parse(r.data) as T]; } catch { return []; }
+  });
 }
 
-export type CatalogModel = { name: string; slug: string; type: string | null };
-export type CatalogBrand = {
-  brandName: string;
-  brandSlug: string;
-  tier: string;
-  models: CatalogModel[];
-};
+// ─── Tyre catalog cache ──────────────────────────────────────────────────────
 
 export async function cacheTyreCatalog(brands: CatalogBrand[]): Promise<void> {
   const db = await getDb();
@@ -333,32 +479,48 @@ export async function cacheTyreCatalog(brands: CatalogBrand[]): Promise<void> {
 
 export async function getCachedTyreCatalog(): Promise<CatalogBrand[]> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ json: string }>(
-    `SELECT json FROM tyre_catalog_cache WHERE id = 1`,
-  );
+  const row = await db.getFirstAsync<{ json: string }>(`SELECT json FROM tyre_catalog_cache WHERE id = 1`);
   if (!row) return [];
-  try {
-    return JSON.parse(row.json) as CatalogBrand[];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(row.json) as CatalogBrand[]; } catch { return []; }
 }
 
-export async function upsertOrder(o: Order): Promise<void> {
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+const UPSERT_ORDER_SQL = `
+  INSERT INTO orders (id, stage, won_items, total_earn_ghs, request_data, handed_over_at, handover_photos, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET
+    stage = excluded.stage,
+    won_items = excluded.won_items,
+    total_earn_ghs = excluded.total_earn_ghs,
+    request_data = excluded.request_data,
+    handed_over_at = excluded.handed_over_at,
+    handover_photos = excluded.handover_photos,
+    updated_at = excluded.updated_at`;
+
+export async function upsertOrders(rows: Order[]): Promise<void> {
+  if (rows.length === 0) return;
   const db = await getDb();
-  await db.runAsync(
-    `INSERT INTO orders (id, stage, won_items, total_earn_ghs, request_data, handed_over_at, handover_photos, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       stage = excluded.stage,
-       won_items = excluded.won_items,
-       total_earn_ghs = excluded.total_earn_ghs,
-       request_data = excluded.request_data,
-       handed_over_at = excluded.handed_over_at,
-       handover_photos = excluded.handover_photos,
-       updated_at = excluded.updated_at`,
-    [o.id, o.stage, o.won_items, o.total_earn_ghs, o.request_data, o.handed_over_at, o.handover_photos, o.updated_at],
-  );
+  await db.withTransactionAsync(async () => {
+    const stmt = await db.prepareAsync(UPSERT_ORDER_SQL);
+    try {
+      for (const o of rows) {
+        await stmt.executeAsync([o.id, o.stage, o.won_items, o.total_earn_ghs, o.request_data, o.handed_over_at, o.handover_photos, o.updated_at]);
+      }
+    } finally {
+      await stmt.finalizeAsync();
+    }
+  });
+}
+
+export async function pruneOrders(keep: Set<string>): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string }>(`SELECT id FROM orders`);
+  const gone = rows.map((r) => r.id).filter((id) => !keep.has(id));
+  if (gone.length === 0) return;
+  await db.withTransactionAsync(async () => {
+    for (const id of gone) await db.runAsync(`DELETE FROM orders WHERE id = ?`, [id]);
+  });
 }
 
 export async function getOrders(): Promise<Order[]> {
@@ -382,11 +544,12 @@ export async function applyLocalStage(orderId: string, stage: string): Promise<v
   await db.runAsync(`UPDATE orders SET stage = ? WHERE id = ?`, [stage, orderId]);
 }
 
+// ─── Stage queue ─────────────────────────────────────────────────────────────
+
 export async function enqueueStage(s: StageQueueItem): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO stage_queue (id, order_id, stage, photos, location, synced, error, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO stage_queue (id, order_id, stage, photos, location, synced, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [s.id, s.order_id, s.stage, s.photos, s.location, s.synced, s.error, s.created_at],
   );
 }
@@ -396,9 +559,9 @@ export async function getPendingStages(): Promise<StageQueueItem[]> {
   return db.getAllAsync<StageQueueItem>(`SELECT * FROM stage_queue WHERE synced = 0 ORDER BY created_at ASC`);
 }
 
-export async function markStageSynced(id: string): Promise<void> {
+export async function markStageSynced(id: string, error: string | null = null): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`UPDATE stage_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+  await db.runAsync(`UPDATE stage_queue SET synced = 1, error = ? WHERE id = ?`, [error, id]);
 }
 
 export async function markStageError(id: string, error: string): Promise<void> {
@@ -406,31 +569,18 @@ export async function markStageError(id: string, error: string): Promise<void> {
   await db.runAsync(`UPDATE stage_queue SET error = ? WHERE id = ?`, [error, id]);
 }
 
-// ─── Tyre listings cache + write queue ───────────────────────────────────────
+// ─── Listings (tyres + lights share one access pattern) ──────────────────────
+//
+// Both listing kinds are offline-first: a local row keyed by a temporary
+// "local-…" id until the create flushes, then re-keyed to the server id.
 
-export type TyreListing = {
-  id: string;
-  server_id: string | null; // null until synced to API
-  width: number;
-  height: number;
-  diameter: number;
-  brand: string;
-  model: string;
-  condition: string;
-  price_ghs: number;
-  photos: string; // JSON string[]
-  in_stock: number; // 0 or 1
-  updated_at: string;
-};
+export type ListingKind = "tyre" | "light";
 
-export type TyreListingQueueItem = {
-  id: string;
-  op: string; // "create" | "update" | "delete"
-  listing_id: string;
-  payload: string; // JSON blob
-  synced: number; // 0 or 1
-  error: string | null;
-  created_at: string;
+type ListingTables = { rows: string; queue: string };
+
+const LISTING_TABLES: Record<ListingKind, ListingTables> = {
+  tyre: { rows: "tyre_listings", queue: "tyre_listing_queue" },
+  light: { rows: "light_listings", queue: "light_listing_queue" },
 };
 
 export async function upsertTyreListing(t: TyreListing): Promise<void> {
@@ -439,18 +589,23 @@ export async function upsertTyreListing(t: TyreListing): Promise<void> {
     `INSERT INTO tyre_listings (id, server_id, width, height, diameter, brand, model, condition, price_ghs, photos, in_stock, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
-       server_id = excluded.server_id,
-       width = excluded.width,
-       height = excluded.height,
-       diameter = excluded.diameter,
-       brand = excluded.brand,
-       model = excluded.model,
-       condition = excluded.condition,
-       price_ghs = excluded.price_ghs,
-       photos = excluded.photos,
-       in_stock = excluded.in_stock,
-       updated_at = excluded.updated_at`,
+       server_id = excluded.server_id, width = excluded.width, height = excluded.height, diameter = excluded.diameter,
+       brand = excluded.brand, model = excluded.model, condition = excluded.condition, price_ghs = excluded.price_ghs,
+       photos = excluded.photos, in_stock = excluded.in_stock, updated_at = excluded.updated_at`,
     [t.id, t.server_id, t.width, t.height, t.diameter, t.brand, t.model, t.condition, t.price_ghs, t.photos, t.in_stock, t.updated_at],
+  );
+}
+
+export async function upsertLightListing(l: LightListing): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO light_listings (id, server_id, light_type, side, make, model, year, condition, price_ghs, photos, in_stock, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       server_id = excluded.server_id, light_type = excluded.light_type, side = excluded.side, make = excluded.make,
+       model = excluded.model, year = excluded.year, condition = excluded.condition, price_ghs = excluded.price_ghs,
+       photos = excluded.photos, in_stock = excluded.in_stock, updated_at = excluded.updated_at`,
+    [l.id, l.server_id, l.light_type, l.side, l.make, l.model, l.year, l.condition, l.price_ghs, l.photos, l.in_stock, l.updated_at],
   );
 }
 
@@ -459,136 +614,83 @@ export async function getTyreListings(): Promise<TyreListing[]> {
   return db.getAllAsync<TyreListing>(`SELECT * FROM tyre_listings ORDER BY updated_at DESC`);
 }
 
-export async function deleteTyreListing(id: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(`DELETE FROM tyre_listings WHERE id = ?`, [id]);
-}
-
-// Remove any stale rows that point at the same server listing but are keyed by
-// a different (e.g. temporary "local-…") id. Guards against duplicates left by
-// older builds where the create flush didn't re-key the local row.
-export async function deleteDuplicateTyreListings(serverId: string, keepId: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `DELETE FROM tyre_listings WHERE server_id = ? AND id != ?`,
-    [serverId, keepId],
-  );
-}
-
-export async function enqueueTyreListing(q: TyreListingQueueItem): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `INSERT INTO tyre_listing_queue (id, op, listing_id, payload, synced, error, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [q.id, q.op, q.listing_id, q.payload, q.synced, q.error, q.created_at],
-  );
-}
-
-export async function getPendingTyreListings(): Promise<TyreListingQueueItem[]> {
-  const db = await getDb();
-  return db.getAllAsync<TyreListingQueueItem>(
-    `SELECT * FROM tyre_listing_queue WHERE synced = 0 ORDER BY created_at ASC`,
-  );
-}
-
-export async function markTyreListingSynced(id: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(`UPDATE tyre_listing_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
-}
-
-export async function markTyreListingError(id: string, error: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(`UPDATE tyre_listing_queue SET error = ? WHERE id = ?`, [error, id]);
-}
-
-// ─── Light listings cache + write queue ──────────────────────────────────────
-
-export type LightListing = {
-  id: string;
-  server_id: string | null;
-  light_type: string;
-  side: string;
-  make: string;
-  model: string;
-  year: string;
-  condition: string;
-  price_ghs: number;
-  photos: string; // JSON string[]
-  in_stock: number; // 0 or 1
-  updated_at: string;
-};
-
-export type LightListingQueueItem = {
-  id: string;
-  op: string; // "create" | "update" | "delete"
-  listing_id: string;
-  payload: string; // JSON blob
-  synced: number; // 0 or 1
-  error: string | null;
-  created_at: string;
-};
-
-export async function upsertLightListing(l: LightListing): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `INSERT INTO light_listings (id, server_id, light_type, side, make, model, year, condition, price_ghs, photos, in_stock, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       server_id = excluded.server_id,
-       light_type = excluded.light_type,
-       side = excluded.side,
-       make = excluded.make,
-       model = excluded.model,
-       year = excluded.year,
-       condition = excluded.condition,
-       price_ghs = excluded.price_ghs,
-       photos = excluded.photos,
-       in_stock = excluded.in_stock,
-       updated_at = excluded.updated_at`,
-    [l.id, l.server_id, l.light_type, l.side, l.make, l.model, l.year, l.condition, l.price_ghs, l.photos, l.in_stock, l.updated_at],
-  );
-}
-
 export async function getLightListings(): Promise<LightListing[]> {
   const db = await getDb();
   return db.getAllAsync<LightListing>(`SELECT * FROM light_listings ORDER BY updated_at DESC`);
 }
 
-export async function deleteLightListing(id: string): Promise<void> {
+export async function deleteListing(kind: ListingKind, id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`DELETE FROM light_listings WHERE id = ?`, [id]);
+  await db.runAsync(`DELETE FROM ${LISTING_TABLES[kind].rows} WHERE id = ?`, [id]);
 }
 
-export async function deleteDuplicateLightListings(serverId: string, keepId: string): Promise<void> {
+/**
+ * Removes rows that point at the same server listing but are keyed by a
+ * different (temporary local) id — leftovers from a create flush that was
+ * interrupted between the API call and the local re-key.
+ */
+export async function deleteDuplicateListings(kind: ListingKind, serverId: string, keepId: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    `DELETE FROM light_listings WHERE server_id = ? AND id != ?`,
-    [serverId, keepId],
+  await db.runAsync(`DELETE FROM ${LISTING_TABLES[kind].rows} WHERE server_id = ? AND id != ?`, [serverId, keepId]);
+}
+
+/**
+ * Deletes synced listings the server no longer returns. Local-only rows
+ * (server_id NULL) and rows with queued ops are always kept.
+ */
+export async function pruneListings(kind: ListingKind, keepServerIds: Set<string>, keepLocalIds: Set<string>): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string; server_id: string | null }>(`SELECT id, server_id FROM ${LISTING_TABLES[kind].rows}`);
+  const gone = rows.filter((r) => r.server_id && !keepServerIds.has(r.server_id) && !keepLocalIds.has(r.id));
+  if (gone.length === 0) return;
+  await db.withTransactionAsync(async () => {
+    for (const r of gone) await db.runAsync(`DELETE FROM ${LISTING_TABLES[kind].rows} WHERE id = ?`, [r.id]);
+  });
+}
+
+/** Local listing ids with a create/update/delete that hasn't reached the server. */
+export async function getListingIdsWithPendingOps(kind: ListingKind): Promise<Set<string>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ listing_id: string }>(
+    `SELECT DISTINCT listing_id FROM ${LISTING_TABLES[kind].queue} WHERE synced = 0`,
   );
+  return new Set(rows.map((r) => r.listing_id));
 }
 
-export async function enqueueLightListing(q: LightListingQueueItem): Promise<void> {
+export async function enqueueListingOp(kind: ListingKind, q: ListingQueueItem): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO light_listing_queue (id, op, listing_id, payload, synced, error, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ${LISTING_TABLES[kind].queue} (id, op, listing_id, payload, synced, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [q.id, q.op, q.listing_id, q.payload, q.synced, q.error, q.created_at],
   );
 }
 
-export async function getPendingLightListings(): Promise<LightListingQueueItem[]> {
+export async function getPendingListingOps(kind: ListingKind): Promise<ListingQueueItem[]> {
   const db = await getDb();
-  return db.getAllAsync<LightListingQueueItem>(
-    `SELECT * FROM light_listing_queue WHERE synced = 0 ORDER BY created_at ASC`,
+  return db.getAllAsync<ListingQueueItem>(
+    `SELECT * FROM ${LISTING_TABLES[kind].queue} WHERE synced = 0 ORDER BY created_at ASC`,
   );
 }
 
-export async function markLightListingSynced(id: string): Promise<void> {
+export async function markListingOpSynced(kind: ListingKind, id: string, error: string | null = null): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`UPDATE light_listing_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+  await db.runAsync(`UPDATE ${LISTING_TABLES[kind].queue} SET synced = 1, error = ? WHERE id = ?`, [error, id]);
 }
 
-export async function markLightListingError(id: string, error: string): Promise<void> {
+export async function markListingOpError(kind: ListingKind, id: string, error: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`UPDATE light_listing_queue SET error = ? WHERE id = ?`, [error, id]);
+  await db.runAsync(`UPDATE ${LISTING_TABLES[kind].queue} SET error = ? WHERE id = ?`, [error, id]);
+}
+
+/** Count of every queued write still waiting for the server, for the sync badge. */
+export async function countPendingWrites(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ n: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM quote_queue WHERE synced = 0) +
+      (SELECT COUNT(*) FROM decline_queue WHERE synced = 0) +
+      (SELECT COUNT(*) FROM stage_queue WHERE synced = 0) +
+      (SELECT COUNT(*) FROM tyre_listing_queue WHERE synced = 0) +
+      (SELECT COUNT(*) FROM light_listing_queue WHERE synced = 0) AS n`);
+  return row?.n ?? 0;
 }

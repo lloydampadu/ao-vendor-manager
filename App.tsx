@@ -1,125 +1,105 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
-import { useFonts } from 'expo-font';
-import NetInfo from '@react-native-community/netinfo';
-import { getToken, loadVendor } from '@/lib/auth';
-import { api } from '@/lib/api';
-import { useAuthStore, type Vendor } from '@/store/auth-store';
-import { useSyncStore } from '@/store/sync-store';
-import { setupNotificationListeners } from '@/lib/notifications';
-import RootNavigator from './src/navigation/RootNavigator';
-import { OfflineBanner } from './components';
-import { COLORS } from './constants/theme';
+import React, { useEffect, useRef } from "react";
+import { useColorScheme } from "react-native";
+import { DarkTheme, DefaultTheme, NavigationContainer, type NavigationContainerRef, type Theme } from "@react-navigation/native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import { useAuthStore } from "@/store/auth-store";
+import { startSyncLoop } from "@/store/sync-store";
+import { registerPushToken, resetPushRegistration, setupNotificationListeners, type NotificationTarget } from "@/lib/notifications";
+import { createLogger } from "@/lib/logger";
+import RootNavigator, { type RootStackParamList } from "./src/navigation/RootNavigator";
+import { ErrorBoundary, OfflineBanner } from "./components";
+import { DARK_COLORS, LIGHT_COLORS } from "./constants/theme";
 
-type VendorMe = { vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] } };
+const log = createLogger("app");
+
+// Keep the native splash up until fonts and the auth session are ready, so the
+// vendor never sees a blank spinner between splash and first screen.
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function navTheme(dark: boolean): Theme {
+  const C = dark ? DARK_COLORS : LIGHT_COLORS;
+  const base = dark ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    colors: { ...base.colors, primary: C.primary, background: C.offwhite, card: C.white, text: C.black, border: C.gray },
+  };
+}
 
 export default function App(): React.JSX.Element {
-  const { vendor, setAuth, setVendor, clearAuth } = useAuthStore();
-  const startSync = useSyncStore((s) => s.startSync);
-  const [checking, setChecking] = useState(true);
-  const navRef = useRef<NavigationContainerRef<ReactNavigation.RootParamList>>(null);
+  const status = useAuthStore((s) => s.status);
+  const hydrate = useAuthStore((s) => s.hydrate);
+  const scheme = useColorScheme();
+  const navRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+  const pendingTarget = useRef<NotificationTarget | null>(null);
 
-  const [fontsLoaded] = useFonts({
-    light: require('./assets/fonts/light.otf'),
-    regular: require('./assets/fonts/regular.otf'),
-    medium: require('./assets/fonts/medium.otf'),
-    bold: require('./assets/fonts/bold.otf'),
-    xtrabold: require('./assets/fonts/xtrabold.otf'),
+  const [fontsLoaded, fontError] = useFonts({
+    light: require("./assets/fonts/light.otf"),
+    regular: require("./assets/fonts/regular.otf"),
+    medium: require("./assets/fonts/medium.otf"),
+    bold: require("./assets/fonts/bold.otf"),
+    xtrabold: require("./assets/fonts/xtrabold.otf"),
   });
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
+    void hydrate();
+  }, [hydrate]);
 
-        // Load cached vendor and show the app immediately — no waiting for network
-        const cachedRaw = await loadVendor();
-        if (cachedRaw) {
-          setVendor(JSON.parse(cachedRaw) as Vendor);
-          setChecking(false); // unblock UI right away
-
-          // Refresh profile + sync assignments in the background
-          api.get<VendorMe>('/vendor-auth/me')
-            .then(({ vendor: v }) => setAuth(token, { ...v, specialties: v.specialties ?? [], brands: v.brands ?? [] }))
-            .catch(async (err) => {
-              if ((err as { status?: number }).status === 401) await clearAuth();
-            });
-          startSync().catch(() => {});
-          return; // checking already set to false above
-        }
-
-        // No cache — must wait for server (first login)
-        try {
-          const { vendor: v } = await api.get<VendorMe>('/vendor-auth/me');
-          await setAuth(token, { ...v, specialties: v.specialties ?? [], brands: v.brands ?? [] });
-        } catch (err) {
-          const e = err as { status?: number };
-          if (e.status === 401) await clearAuth();
-        }
-      } finally {
-        setChecking(false);
-      }
-    })();
-  }, []);
-
+  const ready = (fontsLoaded || !!fontError) && status !== "loading";
   useEffect(() => {
-    let wasOnline: boolean | null = null;
-    const unsub = NetInfo.addEventListener((state) => {
-      const online = !!state.isConnected;
-      if (wasOnline === false && online) {
-        startSync().catch(() => {});
-      }
-      wasOnline = online;
-    });
-    return unsub;
-  }, []);
+    if (ready) void SplashScreen.hideAsync().catch(() => {});
+    if (fontError) log.warn("font load failed — falling back to system fonts", fontError);
+  }, [ready, fontError]);
 
+  // The sync loop and push registration live exactly as long as a session does.
   useEffect(() => {
-    const cleanup = setupNotificationListeners(
-      (assignmentId) => {
-        const nav = navRef.current;
-        if (nav?.isReady()) {
-          nav.navigate('Main' as never);
-          setTimeout(() => {
-            (navRef.current?.navigate as (name: string, params: Record<string, string>) => void)?.(
-              'RequestDetail',
-              { assignmentId },
-            );
-          }, 100);
-        }
-      },
-      (orderId) => {
-        const nav = navRef.current;
-        if (nav?.isReady()) {
-          nav.navigate('Main' as never);
-          setTimeout(() => {
-            (navRef.current?.navigate as (name: string, params: object) => void)?.(
-              'Orders',
-              { screen: 'OrderDetail', params: { orderId } },
-            );
-          }, 100);
-        }
-      },
-    );
-    return cleanup;
-  }, []);
+    if (status !== "signedIn") {
+      resetPushRegistration();
+      return;
+    }
+    const stop = startSyncLoop();
+    registerPushToken().catch((err) => log.warn("registerPushToken failed", err));
+    return stop;
+  }, [status]);
 
-  if (!fontsLoaded || checking) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
-  }
+  // Notification taps: deep-link into the right nested screen. If the tap
+  // arrives before navigation is mounted (cold start), hold it until ready.
+  const openTarget = (target: NotificationTarget) => {
+    const nav = navRef.current;
+    if (!nav?.isReady() || useAuthStore.getState().status !== "signedIn") {
+      pendingTarget.current = target;
+      return;
+    }
+    if (target.kind === "order") {
+      nav.navigate("Main", { screen: "Orders", params: { screen: "OrderDetail", params: { orderId: target.orderId } } });
+    } else {
+      nav.navigate("Main", { screen: "Inbox", params: { screen: "RequestDetail", params: { assignmentId: target.assignmentId } } });
+    }
+  };
+  useEffect(() => setupNotificationListeners(openTarget), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const flushPendingTarget = () => {
+    const t = pendingTarget.current;
+    if (t && status === "signedIn") {
+      pendingTarget.current = null;
+      // Let the Main navigator mount before navigating into it.
+      setTimeout(() => openTarget(t), 50);
+    }
+  };
+
+  if (!ready) return <></>; // splash is still showing
 
   return (
-    <NavigationContainer ref={navRef}>
-      <OfflineBanner />
-      <RootNavigator initialRoute={vendor ? 'Main' : 'Login'} />
-      <StatusBar style="auto" />
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <NavigationContainer ref={navRef} theme={navTheme(scheme === "dark")} onReady={flushPendingTarget} onStateChange={flushPendingTarget}>
+          <OfflineBanner />
+          <RootNavigator />
+          <StatusBar style="auto" />
+        </NavigationContainer>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }

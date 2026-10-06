@@ -1,63 +1,68 @@
-import React, { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/auth-store';
-import { useSyncStore } from '../../store/sync-store';
-import { registerPushToken } from '@/lib/notifications';
-import { ReusableBtn, ReusableText, HeightSpacer } from '../../components';
-import { SIZES, useThemeColors } from '../../constants/theme';
-import { RootStackParamList } from '../navigation/RootNavigator';
+import React, { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { isApiError, vendorAuthApi } from "@/lib/api";
+import { toVendor, useAuthStore } from "@/store/auth-store";
+import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
+import { SIZES, useThemeColors } from "../../constants/theme";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 
-type Props = NativeStackScreenProps<RootStackParamList, 'OTP'>;
-type VerifyResponse = { token: string; vendor: { id: string; name: string; phone: string; categories: string[]; specialties: string[]; brands: string[] } };
+type Props = NativeStackScreenProps<RootStackParamList, "OTP">;
+
+const RESEND_COOLDOWN_S = 30;
 
 export default function OTPScreen({ route, navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
   const { phone } = route.params;
-  const [code, setCode] = useState('');
+  const signIn = useAuthStore((s) => s.signIn);
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
-  const { setAuth } = useAuthStore();
-  const { startSync } = useSyncStore();
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_S);
+  const [resending, setResending] = useState(false);
 
-  async function verify(): Promise<void> {
-    if (code.length !== 6) { setError('Enter the 6-digit code'); return; }
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  async function verify(submitted = code): Promise<void> {
+    if (submitted.length !== 6) { setError("Enter the 6-digit code"); return; }
     setError(undefined);
     setLoading(true);
     try {
-      const { token, vendor } = await api.post<VerifyResponse>('/vendor-auth/otp/verify', { phone, code });
-      await setAuth(token, { ...vendor, specialties: vendor.specialties ?? [], brands: vendor.brands ?? [] });
-      const needsSpecialties = !vendor.specialties || vendor.specialties.length === 0;
-      const needsBrands = !vendor.brands || vendor.brands.length === 0;
-      const route = needsSpecialties ? 'Onboarding' : needsBrands ? 'OnboardingBrands' : 'Main';
-      navigation.reset({ index: 0, routes: [{ name: route }] });
-      startSync().catch(() => {});
-      registerPushToken().catch((e) => {
-        // Surfaced, not swallowed: in Expo Go (SDK 53+) there is no push token,
-        // so this is expected there; on a real build a failure here means the
-        // vendor won't receive new-request notifications.
-        console.warn('[notifications] registerPushToken failed:', e);
-      });
-    } catch (e: unknown) {
-      setError('Wrong code or it has expired. Please try again.');
-    } finally {
+      const { token, vendor } = await vendorAuthApi.verifyOtp(phone, submitted);
+      // The root navigator switches to onboarding / main from the store.
+      await signIn(token, toVendor(vendor));
+    } catch (e) {
+      if (isApiError(e) && e.isNetworkError) setError("No connection. Check your internet and try again.");
+      else setError("Wrong code or it has expired. Please try again.");
       setLoading(false);
+    }
+  }
+
+  async function resend(): Promise<void> {
+    setResending(true);
+    setError(undefined);
+    try {
+      await vendorAuthApi.sendOtp(phone);
+      setCooldown(RESEND_COOLDOWN_S);
+      setCode("");
+    } catch {
+      setError("Couldn't resend the code. Please try again.");
+    } finally {
+      setResending(false);
     }
   }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: C.white }]}>
-      <View style={styles.container}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ReusableText text="Enter code" family="bold" size={32} color={C.secondary} />
         <HeightSpacer height={8} />
-        <ReusableText
-          text={`We sent a 6-digit code to ${phone}.`}
-          family="regular"
-          size={SIZES.small}
-          color={C.gray2}
-        />
+        <ReusableText text={`We sent a 6-digit code by SMS to ${phone}.`} family="regular" size={SIZES.small} color={C.gray2} />
         <HeightSpacer height={24} />
 
         <ReusableText text="Code" family="medium" size={SIZES.small} color={C.secondary} />
@@ -65,16 +70,25 @@ export default function OTPScreen({ route, navigation }: Props): React.JSX.Eleme
         <TextInput
           style={[styles.input, { borderColor: error ? C.red : C.gray, color: C.secondary, backgroundColor: C.offwhite }]}
           keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete="sms-otp"
           placeholder="123456"
           placeholderTextColor={C.gray2}
           maxLength={6}
           value={code}
-          onChangeText={(t) => { setCode(t); setError(undefined); }}
+          onChangeText={(t) => {
+            const digits = t.replace(/\D/g, "");
+            setCode(digits);
+            setError(undefined);
+            if (digits.length === 6) void verify(digits); // auto-submit on the 6th digit
+          }}
           autoFocus
+          editable={!loading}
+          accessibilityLabel="One-time code"
         />
         {error ? (
           <>
-            <HeightSpacer height={4} />
+            <HeightSpacer height={6} />
             <ReusableText text={error} family="regular" size={SIZES.xSmall} color={C.red} />
           </>
         ) : null}
@@ -82,40 +96,44 @@ export default function OTPScreen({ route, navigation }: Props): React.JSX.Eleme
         <HeightSpacer height={24} />
         <ReusableBtn
           onPress={() => void verify()}
-          btnText={loading ? 'Verifying…' : 'Verify'}
+          btnText={loading ? "Verifying…" : "Verify"}
           backgroundColor={loading ? C.gray2 : C.primary}
           textColor={C.white}
-          width="100%"
           height={52}
           borderRadius={12}
           fontSize={SIZES.medium}
+          disabled={loading}
         />
         <HeightSpacer height={12} />
-        <ReusableBtn
-          onPress={() => navigation.goBack()}
-          btnText="Use a different number"
-          backgroundColor="transparent"
-          textColor={C.gray2}
-          width="100%"
-          height={44}
-          borderRadius={12}
-          fontSize={SIZES.small}
-        />
-      </View>
+        <View style={styles.row}>
+          <ReusableBtn
+            onPress={() => void resend()}
+            btnText={resending ? "Sending…" : cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
+            backgroundColor="transparent"
+            textColor={cooldown > 0 || resending ? C.gray2 : C.primary}
+            height={44}
+            borderRadius={12}
+            fontSize={SIZES.small}
+            disabled={cooldown > 0 || resending}
+          />
+          <ReusableBtn
+            onPress={() => navigation.goBack()}
+            btnText="Change number"
+            backgroundColor="transparent"
+            textColor={C.gray2}
+            height={44}
+            borderRadius={12}
+            fontSize={SIZES.small}
+          />
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  container: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
-  input: {
-    height: 52,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontFamily: 'regular',
-    fontSize: SIZES.medium,
-    letterSpacing: 6,
-  },
+  container: { flex: 1, paddingHorizontal: 24, justifyContent: "center" },
+  input: { height: 52, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, fontFamily: "regular", fontSize: SIZES.medium, letterSpacing: 6 },
+  row: { flexDirection: "row", gap: 8 },
 });

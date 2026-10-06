@@ -1,198 +1,118 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
-import * as Notifications from "expo-notifications";
-import { useIsFocused } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { getAssignments, initDb, type Assignment } from "../../lib/db";
-import { useSyncStore } from "../../store/sync-store";
-import { RequestCard, ReusableText, HeightSpacer, InboxSkeletonList } from "../../components";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { getAssignments, type Assignment } from "@/lib/db";
+import { effectiveStatus, INBOX_SEGMENTS, parseJson, type EffectiveStatus, type InboxSegmentKey } from "@/lib/assignment-status";
+import { clearBadge } from "@/lib/notifications";
+import { useSyncedQuery, usePullToRefresh } from "@/hooks/useSyncedQuery";
+import { RequestCard, EmptyState, InboxSkeletonList, ReusableText } from "../../components";
+import type { RequestData } from "../../components/RequestCard";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
 
-type Props = {
-  navigation: NativeStackNavigationProp<InboxStackParamList, "InboxList">;
+type Props = NativeStackScreenProps<InboxStackParamList, "InboxList">;
+
+type Row = { assignment: Assignment; status: EffectiveStatus; request: RequestData };
+
+const EMPTY: Record<InboxSegmentKey, { title: string; subtitle: string }> = {
+  new: { title: "No new requests", subtitle: "New part requests matching what you sell will show up here." },
+  quoted: { title: "No quotes sent yet", subtitle: "Requests you've priced will show here, with the result once the customer decides." },
+  closed: { title: "Nothing closed", subtitle: "Declined and expired requests end up here." },
 };
 
-const SEGMENTS = ["PENDING", "QUOTED", "DECLINED"] as const;
-type Segment = (typeof SEGMENTS)[number];
-
-type SegmentState = { loading: boolean; assignments: Assignment[] };
-
-type RequestData = {
-  partName: string;
-  make?: string | null;
-  model?: string | null;
-  year?: number | null;
-  notes?: string | null;
-  items?: { id: string; partName: string }[];
-};
+function toRow(a: Assignment): Row {
+  const quote = parseJson<{ status?: string } | null>(a.quote_data, null);
+  return {
+    assignment: a,
+    status: effectiveStatus(a.status, quote),
+    request: parseJson<RequestData>(a.request_data, { partName: "Part request" }),
+  };
+}
 
 export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
-  const [segment, setSegment] = useState<Segment>("PENDING");
-  const [segmentStates, setSegmentStates] = useState<Record<Segment, SegmentState>>(() => ({
-    PENDING:  { loading: true, assignments: [] },
-    QUOTED:   { loading: true, assignments: [] },
-    DECLINED: { loading: true, assignments: [] },
-  }));
-  const [refreshing, setRefreshing] = useState(false);
-  const { startSync } = useSyncStore();
-  const isFocused = useIsFocused();
-  const lastFpRef = useRef<Partial<Record<Segment, string>>>({});
-  const segmentLoadedRef = useRef<Partial<Record<Segment, boolean>>>({});
-  const firstFocusRef = useRef(true);
-  // Always up-to-date segment for use inside stable callbacks
-  const segmentRef = useRef<Segment>("PENDING");
-  useEffect(() => { segmentRef.current = segment; }, [segment]);
+  const [segment, setSegment] = useState<InboxSegmentKey>("new");
 
-  const { loading, assignments } = segmentStates[segment];
+  const load = useCallback(async () => (await getAssignments()).map(toRow), []);
+  const { data: rows, loading } = useSyncedQuery<Row[]>(load, []);
+  const { refreshing, onRefresh } = usePullToRefresh();
 
-  // load() takes the target segment explicitly so it's stable (no segment dep)
-  const load = useCallback(async (seg: Segment, silent = false) => {
-    if (!silent && !segmentLoadedRef.current[seg]) {
-      setSegmentStates((prev) => ({ ...prev, [seg]: { ...prev[seg], loading: true } }));
+  useEffect(() => { void clearBadge(); }, []);
+
+  const bySegment = useMemo(() => {
+    const out: Record<InboxSegmentKey, Row[]> = { new: [], quoted: [], closed: [] };
+    for (const r of rows) {
+      const seg = INBOX_SEGMENTS.find((s) => (s.statuses as readonly EffectiveStatus[]).includes(r.status));
+      if (seg) out[seg.key].push(r);
     }
-    await initDb();
-    const rows = await getAssignments(seg);
-    const fp = rows.map((a) => `${a.id}:${a.status}:${a.updated_at}`).join("|");
-    if (fp !== lastFpRef.current[seg]) {
-      lastFpRef.current[seg] = fp;
-      setSegmentStates((prev) => ({ ...prev, [seg]: { loading: false, assignments: rows } }));
-    } else {
-      setSegmentStates((prev) => ({ ...prev, [seg]: { ...prev[seg], loading: false } }));
-    }
-    segmentLoadedRef.current[seg] = true;
-  }, []);
+    return out;
+  }, [rows]);
 
-  // Pre-load all segments in parallel on mount so tab switches are instant
-  useEffect(() => { void Promise.all(SEGMENTS.map((seg) => load(seg))); }, [load]);
-
-  // Sync on focus — skip the very first mount (load() above handles it)
-  useEffect(() => {
-    if (!isFocused) return;
-    if (firstFocusRef.current) {
-      firstFocusRef.current = false;
-      return;
-    }
-    startSync().then(() => load(segmentRef.current, true)).catch(() => {});
-  }, [isFocused, startSync, load]);
-
-  // Sync when app returns to foreground
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active" && isFocused) {
-        startSync().then(() => load(segmentRef.current, true)).catch(() => {});
-      }
-    });
-    return () => sub.remove();
-  }, [isFocused, startSync, load]);
-
-  // Poll every 30s while focused
-  useEffect(() => {
-    if (!isFocused) return;
-    const id = setInterval(() => {
-      startSync().then(() => load(segmentRef.current, true)).catch(() => {});
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [isFocused, startSync, load]);
-
-  useEffect(() => {
-    void Notifications.setBadgeCountAsync(0);
-  }, []);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await startSync();
-      await load(segmentRef.current);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [startSync, load]);
-
-  const handleCardPress = useCallback(
-    (assignmentId: string) => navigation.navigate("RequestDetail", { assignmentId }),
-    [navigation],
-  );
+  const visible = bySegment[segment];
+  const empty = EMPTY[segment];
 
   return (
     <View style={[styles.container, { backgroundColor: C.offwhite }]}>
       <View style={[styles.segments, { backgroundColor: C.white, borderBottomColor: C.gray }]}>
-        {SEGMENTS.map((s) => (
-          <TouchableOpacity
-            key={s}
-            style={[styles.seg, segment === s && [styles.segActive, { borderBottomColor: C.primary }]]}
-            onPress={() => setSegment(s)}
-          >
-            <ReusableText
-              text={s}
-              family={segment === s ? "medium" : "regular"}
-              size={SIZES.small}
-              color={segment === s ? C.primary : C.gray2}
-            />
-          </TouchableOpacity>
-        ))}
+        {INBOX_SEGMENTS.map((s) => {
+          const active = segment === s.key;
+          const count = bySegment[s.key].length;
+          return (
+            <TouchableOpacity
+              key={s.key}
+              style={[styles.seg, active && { borderBottomWidth: 2, borderBottomColor: C.primary }]}
+              onPress={() => setSegment(s.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+            >
+              <SegmentLabel label={s.label} count={s.key === "new" ? count : undefined} active={active} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {loading ? (
-        <ScrollView>
-          <InboxSkeletonList />
-        </ScrollView>
-      ) : <FlatList
-        data={assignments}
-        keyExtractor={(a) => a.id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => void onRefresh()}
-            tintColor={C.primary}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <ReusableText text="📭" family="regular" size={48} color={C.gray2} />
-            <HeightSpacer height={12} />
-            <ReusableText
-              text={segment === "PENDING" ? "No new requests" : segment === "QUOTED" ? "No quotes sent yet" : "No declined requests"}
-              family="medium"
-              size={SIZES.medium}
-              color={C.secondary}
-            />
-            <HeightSpacer height={6} />
-            <ReusableText
-              text={segment === "PENDING" ? "Pull down to check for new requests" : "Your sent quotes will show here"}
-              family="regular"
-              size={SIZES.small}
-              color={C.gray2}
-            />
-          </View>
-        }
-        renderItem={({ item }) => {
-          const requestData = JSON.parse(item.request_data) as RequestData;
-          return (
+        <InboxSkeletonList />
+      ) : (
+        <FlatList
+          data={visible}
+          keyExtractor={(r) => r.assignment.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={C.primary} />}
+          ListEmptyComponent={<EmptyState icon="mail-open-outline" title={empty.title} subtitle={empty.subtitle} />}
+          renderItem={({ item }) => (
             <RequestCard
-              id={item.id}
               status={item.status}
-              requestData={requestData}
-              updatedAt={item.updated_at}
-              onPress={() => handleCardPress(item.id)}
+              requestData={item.request}
+              updatedAt={item.assignment.updated_at}
+              onPress={() => navigation.navigate("RequestDetail", { assignmentId: item.assignment.id })}
             />
-          );
-        }}
-      />}
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+function SegmentLabel({ label, count, active }: { label: string; count?: number; active: boolean }) {
+  const C = useThemeColors();
+  return (
+    <View style={styles.segLabel}>
+      <ReusableText text={label} family={active ? "medium" : "regular"} size={SIZES.small} color={active ? C.primary : C.gray2} />
+      {count != null && count > 0 && (
+        <View style={[styles.countPill, { backgroundColor: active ? C.primary : C.gray }]}>
+          <ReusableText text={String(count)} family="medium" size={11} color={active ? C.white : C.secondary} />
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  segments: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-  },
-  seg: { flex: 1, paddingVertical: 16, alignItems: "center" },
-  segActive: { borderBottomWidth: 2 },
+  segments: { flexDirection: "row", borderBottomWidth: 1 },
+  seg: { flex: 1, paddingVertical: 14, alignItems: "center" },
+  segLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
+  countPill: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, alignItems: "center", justifyContent: "center" },
   list: { padding: 12, gap: 10, flexGrow: 1 },
-  emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
 });

@@ -18,7 +18,8 @@ export default function OrdersStackNavigator(): React.JSX.Element {
       screenOptions={{
         headerStyle: { backgroundColor: C.white },
         headerTintColor: C.black,
-        headerTitleStyle: { color: C.black },
+        headerTitleStyle: { color: C.black, fontFamily: "bold" },
+        headerBackTitle: "Back",
       }}
     >
       <Stack.Screen name="OrdersList" component={OrdersScreen} options={{ title: "Orders" }} />

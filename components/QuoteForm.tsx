@@ -1,173 +1,99 @@
 import React, { useState } from "react";
-import {
-  Alert, ActivityIndicator, ScrollView, View, TextInput, StyleSheet,
-  TouchableOpacity,
-} from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import { Alert, StyleSheet, TextInput, View } from "react-native";
 import * as Location from "expo-location";
+import { Ionicons } from "@expo/vector-icons";
 import ReusableText from "./Reusable/ReusableText";
 import ReusableBtn from "./Reusable/ReusableBtn";
-import NetworkImage from "./Reusable/NetworkImage";
 import HeightSpacer from "./Reusable/HeightSpacer";
+import { PhotoGrid } from "./PhotoGrid";
 import { SIZES, useThemeColors } from "../constants/theme";
-import { uploadImage } from "../lib/upload";
-import { Ionicons } from "@expo/vector-icons";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 
-const CONDITION_OPTIONS = ["Brand New", "Home Used"] as const;
-type Condition = (typeof CONDITION_OPTIONS)[number];
+export const CONDITION_OPTIONS = ["Brand New", "Home Used"] as const;
+export type Condition = (typeof CONDITION_OPTIONS)[number];
 const MAX_PHOTOS_PER_CONDITION = 4;
 
 export type PriceEntry = { condition: Condition; priceGhs: number };
 
 export type QuotePayload = {
   prices: PriceEntry[];
-  // photos per condition: { "Brand New": [...urls], "Home Used": [...urls] }
+  /** Photos per condition. May contain local file URIs when quoted offline — the sync queue uploads them. */
   photosByCondition: Partial<Record<Condition, string[]>>;
-  // flat list for backward compat with existing API/DB fields
+  /** Flat list for backward compat with the API/DB. */
   photos: string[];
   location?: { latitude: number; longitude: number };
 };
 
 type Props = {
-  assignmentId: string;
-  feePaid?: boolean;
-  partName?: string;
+  /** When true, every priced condition needs at least one photo. */
+  requirePhotos?: boolean;
+  /** Allow quoting with photos that upload later (offline-first). */
+  allowDeferredPhotos?: boolean;
   onSubmit: (payload: QuotePayload) => Promise<void>;
-  initialValues?: { priceGhs: number; availability: string; photos?: string[]; prices?: PriceEntry[] };
+  initialValues?: { priceGhs?: number; availability?: string; photos?: string[]; prices?: PriceEntry[]; photosByCondition?: Partial<Record<Condition, string[]>> };
   submitLabel?: string;
 };
 
-export function QuoteForm({
-  assignmentId,
-  feePaid = false,
-  partName,
-  onSubmit,
-  initialValues,
-  submitLabel,
-}: Props): React.JSX.Element {
+function parsePrice(raw: string): number {
+  const n = parseInt(raw.replace(/[^\d]/g, ""), 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+export function QuoteForm({ requirePhotos = true, allowDeferredPhotos = true, onSubmit, initialValues, submitLabel }: Props): React.JSX.Element {
   const C = useThemeColors();
 
-  const initPrices = (): Record<Condition, string> => {
-    if (initialValues?.prices && initialValues.prices.length > 0) {
-      const map: Record<Condition, string> = { "Brand New": "", "Home Used": "" };
-      initialValues.prices.forEach((p) => { map[p.condition] = String(p.priceGhs); });
-      return map;
+  const [prices, setPrices] = useState<Record<Condition, string>>(() => {
+    const map: Record<Condition, string> = { "Brand New": "", "Home Used": "" };
+    if (initialValues?.prices?.length) {
+      for (const p of initialValues.prices) if (p.condition in map) map[p.condition] = String(p.priceGhs);
+    } else if (initialValues?.priceGhs) {
+      const cond = CONDITION_OPTIONS.includes(initialValues.availability as Condition) ? (initialValues.availability as Condition) : "Brand New";
+      map[cond] = String(initialValues.priceGhs);
     }
-    const cond = CONDITION_OPTIONS.includes(initialValues?.availability as Condition)
-      ? (initialValues!.availability as Condition)
-      : "Brand New";
-    return {
-      "Brand New": cond === "Brand New" ? String(initialValues?.priceGhs ?? "") : "",
-      "Home Used": cond === "Home Used" ? String(initialValues?.priceGhs ?? "") : "",
-    };
-  };
+    return map;
+  });
 
-  const [prices, setPrices] = useState<Record<Condition, string>>(initPrices);
-
-  // Multiple photos per condition: condition → array of { localUri, uploadedUrl | null }
-  type PhotoEntry = { localUri: string; url: string | null };
-  const [photosByCondition, setPhotosByCondition] = useState<Partial<Record<Condition, PhotoEntry[]>>>({});
+  const brandNew = usePhotoUpload({ max: MAX_PHOTOS_PER_CONDITION, allowDeferred: allowDeferredPhotos, initial: initialValues?.photosByCondition?.["Brand New"] ?? [], quality: 0.75 });
+  const homeUsed = usePhotoUpload({ max: MAX_PHOTOS_PER_CONDITION, allowDeferred: allowDeferredPhotos, initial: initialValues?.photosByCondition?.["Home Used"] ?? [], quality: 0.75 });
+  const pickers: Record<Condition, typeof brandNew> = { "Brand New": brandNew, "Home Used": homeUsed };
 
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // Which condition has the camera open (blocks double-tap)
-  const [pendingCondition, setPendingCondition] = useState<Condition | null>(null);
 
-  // Conditions with a filled price
-  const filledConditions = CONDITION_OPTIONS.filter((c) => parseInt(prices[c], 10) > 0);
+  const filledConditions = CONDITION_OPTIONS.filter((c) => parsePrice(prices[c]) > 0);
 
-  // All photos uploaded (no pending null url) and each filled condition has ≥1 photo
-  const allPhotosDone = feePaid
-    ? filledConditions.every((c) => {
-        const entries = photosByCondition[c] ?? [];
-        return entries.length > 0 && entries.every((p) => p.url !== null);
-      })
-    : true;
-
-  const uploadingForCondition = (cond: Condition) =>
-    (photosByCondition[cond] ?? []).some((p) => p.url === null);
-
-  async function openCamera(forCondition: Condition) {
-    setPendingCondition(forCondition);
-    const camPerm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!camPerm.granted) {
-      Alert.alert("Camera needed", "Please allow camera access to continue.");
-      setPendingCondition(null);
-      return;
+  async function captureFor(cond: Condition) {
+    await pickers[cond].capture();
+    // Grab a one-time location alongside the first photo; best effort.
+    if (!location) {
+      const perm = await Location.getForegroundPermissionsAsync();
+      const granted = perm.granted || (await Location.requestForegroundPermissionsAsync()).granted;
+      if (granted) {
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+          .then((pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
+          .catch(() => {});
+      }
     }
-    const locPerm = await Location.requestForegroundPermissionsAsync();
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.75,
-    });
-    if (result.canceled) {
-      setPendingCondition(null);
-      return;
-    }
-
-    setPendingCondition(null);
-
-    const uri = result.assets[0].uri;
-    // Add a pending entry (url = null while uploading)
-    setPhotosByCondition((prev) => ({
-      ...prev,
-      [forCondition]: [...(prev[forCondition] ?? []), { localUri: uri, url: null }],
-    }));
-
-    if (locPerm.granted && !location) {
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-        .then((pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
-        .catch(() => {});
-    }
-
-    try {
-      const url = await uploadImage(uri);
-      setPhotosByCondition((prev) => {
-        const entries = [...(prev[forCondition] ?? [])];
-        let idx = -1;
-        for (let i = entries.length - 1; i >= 0; i--) {
-          if (entries[i].localUri === uri && entries[i].url === null) { idx = i; break; }
-        }
-        if (idx !== -1) entries[idx] = { ...entries[idx], url };
-        return { ...prev, [forCondition]: entries };
-      });
-    } catch (e) {
-      // Remove the failed entry
-      setPhotosByCondition((prev) => ({
-        ...prev,
-        [forCondition]: (prev[forCondition] ?? []).filter((e) => !(e.localUri === uri && e.url === null)),
-      }));
-      Alert.alert("Photo not uploaded", "The photo didn't go through. Check your connection and try again.");
-    }
-  }
-
-  function removePhoto(condition: Condition, index: number) {
-    setPhotosByCondition((prev) => {
-      const entries = [...(prev[condition] ?? [])];
-      entries.splice(index, 1);
-      return { ...prev, [condition]: entries };
-    });
   }
 
   async function submit() {
     const priceEntries: PriceEntry[] = CONDITION_OPTIONS
-      .map((c) => ({ condition: c, priceGhs: parseInt(prices[c], 10) }))
+      .map((c) => ({ condition: c, priceGhs: parsePrice(prices[c]) }))
       .filter((e) => e.priceGhs > 0);
     if (priceEntries.length === 0) {
-      Alert.alert("No price entered", "Please enter a price for at least one condition.");
+      Alert.alert("No price entered", "Enter a price for at least one condition.");
       return;
     }
-    if (feePaid) {
-      // Check all photos are uploaded (no pending null)
-      const stillUploading = priceEntries.some((e) => uploadingForCondition(e.condition));
-      if (stillUploading) { Alert.alert("Please wait", "Photos are still uploading."); return; }
-      const missing = priceEntries.filter((e) => !(photosByCondition[e.condition]?.length));
+    if (priceEntries.some((e) => pickers[e.condition].uploading)) {
+      Alert.alert("Please wait", "Photos are still uploading.");
+      return;
+    }
+    if (requirePhotos) {
+      const missing = priceEntries.filter((e) => pickers[e.condition].urls.length === 0);
       if (missing.length > 0) {
         Alert.alert(
           "Photo needed",
-          missing.length > 1
-            ? "Please take at least one photo for each condition."
-            : `Please take at least one photo of the ${missing[0].condition} part.`,
+          missing.length > 1 ? "Take at least one photo for each condition you priced." : `Take at least one photo of the ${missing[0].condition} part.`,
         );
         return;
       }
@@ -175,17 +101,11 @@ export function QuoteForm({
     setSubmitting(true);
     try {
       const byCondition: Partial<Record<Condition, string[]>> = {};
-      priceEntries.forEach((e) => {
-        byCondition[e.condition] = (photosByCondition[e.condition] ?? [])
-          .map((p) => p.url)
-          .filter((u): u is string => !!u);
-      });
-      // Flat list — all photos in condition order, for backward compat
-      const flatPhotos = priceEntries.flatMap((e) => byCondition[e.condition] ?? []);
+      for (const e of priceEntries) byCondition[e.condition] = pickers[e.condition].urls;
       await onSubmit({
         prices: priceEntries,
         photosByCondition: byCondition,
-        photos: flatPhotos,
+        photos: priceEntries.flatMap((e) => byCondition[e.condition] ?? []),
         ...(location ? { location } : {}),
       });
     } finally {
@@ -197,121 +117,47 @@ export function QuoteForm({
     <View>
       <ReusableText text="Your price (GHS)" family="medium" size={SIZES.small} color={C.secondary} />
       <HeightSpacer height={4} />
-      <ReusableText
-        text="Enter a price for each type you have. Leave blank if you don't have it."
-        family="regular"
-        size={11}
-        color={C.gray2}
-      />
+      <ReusableText text="Enter a price for each type you have. Leave blank if you don't have it." family="regular" size={11} color={C.gray2} />
       <HeightSpacer height={10} />
 
       {CONDITION_OPTIONS.map((opt) => (
-        <View key={opt} style={styles.conditionPriceRow}>
+        <View key={opt} style={styles.priceRow}>
           <View style={styles.conditionLabel}>
             <ReusableText text={opt} family="medium" size={SIZES.small} color={C.secondary} />
           </View>
           <TextInput
-            style={[styles.input, styles.conditionPriceInput, { borderColor: C.gray, color: C.secondary, backgroundColor: C.white }]}
+            style={[styles.input, { borderColor: C.gray, color: C.secondary, backgroundColor: C.white }]}
             value={prices[opt]}
-            onChangeText={(v) => setPrices((prev) => ({ ...prev, [opt]: v }))}
+            onChangeText={(v) => setPrices((prev) => ({ ...prev, [opt]: v.replace(/[^\d]/g, "") }))}
             keyboardType="number-pad"
             placeholder="Leave empty if you don't have it"
             placeholderTextColor={C.gray2}
+            accessibilityLabel={`${opt} price`}
           />
         </View>
       ))}
 
-      {feePaid && filledConditions.length > 0 && (
+      {requirePhotos && filledConditions.length > 0 && (
         <>
-          <HeightSpacer height={20} />
-
+          <HeightSpacer height={16} />
           {filledConditions.map((cond) => {
-            const entries = photosByCondition[cond] ?? [];
-            const hasPhotos = entries.length > 0;
-            const canAddMore = entries.length < MAX_PHOTOS_PER_CONDITION;
-            const isUploading = uploadingForCondition(cond);
-
+            const picker = pickers[cond];
             return (
-              <View key={cond} style={[styles.conditionPhotoBlock, { borderColor: C.gray, backgroundColor: C.white }]}>
-                {/* Header row */}
-                <View style={styles.conditionPhotoHeader}>
-                  <View style={styles.conditionBadge}>
-                    <Ionicons
-                      name={cond === "Brand New" ? "sparkles-outline" : "refresh-outline"}
-                      size={14}
-                      color={C.primary}
-                    />
-                    <ReusableText text={`  ${cond}`} family="bold" size={SIZES.small} color={C.primary} />
+              <View key={cond} style={[styles.photoBlock, { borderColor: C.gray, backgroundColor: C.white }]}>
+                <View style={styles.photoHeader}>
+                  <View style={styles.badge}>
+                    <Ionicons name={cond === "Brand New" ? "sparkles-outline" : "refresh-outline"} size={14} color={C.primary} />
+                    <ReusableText text={`  ${cond} photos`} family="bold" size={SIZES.small} color={C.primary} />
                   </View>
-                  <ReusableText
-                    text={`${entries.filter((e) => e.url).length}/${MAX_PHOTOS_PER_CONDITION} photos`}
-                    family="regular"
-                    size={11}
-                    color={C.gray2}
-                  />
+                  <ReusableText text={`${picker.photos.length}/${MAX_PHOTOS_PER_CONDITION}`} family="regular" size={11} color={C.gray2} />
                 </View>
-
-                {/* Thumbnail strip */}
-                {hasPhotos && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbStrip}>
-                    {entries.map((entry, i) => (
-                      <View key={entry.localUri} style={styles.thumbWrap}>
-                        <NetworkImage source={entry.localUri} width={72} height={72} radius={8} />
-                        {entry.url === null && (
-                          <View style={styles.thumbUploadingOverlay}>
-                            <ActivityIndicator color="#fff" size="small" />
-                          </View>
-                        )}
-                        <TouchableOpacity
-                          style={styles.thumbRemove}
-                          onPress={() => removePhoto(cond, i)}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                        >
-                          <Ionicons name="close-circle" size={18} color="#ef4444" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
-
-                {/* Add photo button */}
-                {canAddMore && !pendingCondition && (
-                  <TouchableOpacity
-                    style={[styles.addPhotoBtn, { borderColor: C.primary, backgroundColor: C.primary1 }]}
-                    onPress={() => { void openCamera(cond); }}
-                    disabled={isUploading}
-                  >
-                    <Ionicons name="camera-outline" size={18} color={C.primary} />
-                    <ReusableText
-                      text={hasPhotos ? "  Add another photo" : "  Take a photo"}
-                      family="medium"
-                      size={SIZES.small}
-                      color={C.primary}
-                    />
-                  </TouchableOpacity>
-                )}
-
-                {!canAddMore && (
-                  <ReusableText text="Max 4 photos reached" family="regular" size={11} color={C.gray2} />
+                <PhotoGrid photos={picker.photos} canAddMore={picker.canAddMore} onAdd={() => void captureFor(cond)} onRemove={picker.remove} size={72} />
+                {picker.hasDeferred && (
+                  <ReusableText text="You're offline — photos will upload with your quote when you're back online." family="regular" size={11} color={C.gray2} />
                 )}
               </View>
             );
           })}
-
-          {location && allPhotosDone && (
-            <>
-              <HeightSpacer height={4} />
-              <View style={styles.locationRow}>
-                <Ionicons name="location" size={11} color={C.gray2} />
-                <ReusableText
-                  text={`  ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
-                  family="regular"
-                  size={11}
-                  color={C.gray2}
-                />
-              </View>
-            </>
-          )}
         </>
       )}
 
@@ -321,67 +167,20 @@ export function QuoteForm({
         btnText={submitting ? "Sending…" : (submitLabel ?? "Send Quote")}
         backgroundColor={submitting ? C.gray2 : C.primary}
         textColor={C.white}
-        width="100%"
         height={52}
         borderRadius={10}
         fontSize={SIZES.medium}
+        disabled={submitting}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  input: {
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: SIZES.medium,
-    fontFamily: "regular",
-  },
-  conditionPriceRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  input: { flex: 1, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: SIZES.medium, fontFamily: "regular" },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   conditionLabel: { width: 90 },
-  conditionPriceInput: { flex: 1 },
-  conditionPhotoBlock: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    gap: 10,
-  },
-  conditionPhotoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  conditionBadge: { flexDirection: "row", alignItems: "center" },
-  thumbStrip: { flexGrow: 0 },
-  thumbWrap: {
-    position: "relative",
-    marginRight: 8,
-  },
-  thumbUploadingOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbRemove: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-  },
-  addPhotoBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-  },
-  locationRow: { flexDirection: "row", alignItems: "center" },
+  photoBlock: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10, gap: 10 },
+  photoHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  badge: { flexDirection: "row", alignItems: "center" },
 });

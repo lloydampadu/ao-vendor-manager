@@ -1,6 +1,10 @@
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
-import { api } from './api';
+import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+import { vendorAuthApi } from "./api";
+import { createLogger } from "./logger";
+
+const log = createLogger("notifications");
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -12,81 +16,97 @@ Notifications.setNotificationHandler({
   }),
 });
 
+export type NotificationTarget =
+  | { kind: "assignment"; assignmentId: string }
+  | { kind: "order"; orderId: string };
+
+/** Parses the push payload the API sends (`{ screen?, assignmentId }`). */
+export function targetFromData(data: Record<string, unknown> | undefined): NotificationTarget | null {
+  const assignmentId = typeof data?.assignmentId === "string" ? data.assignmentId : undefined;
+  if (!assignmentId) return null;
+  if (data?.screen === "orders") return { kind: "order", orderId: assignmentId };
+  return { kind: "assignment", assignmentId };
+}
+
+let lastRegisteredToken: string | null = null;
+
 /**
- * Requests push notification permission, obtains the Expo push token,
- * and registers it with the API. Must be called after the vendor JWT has
- * been persisted (via setAuth) so that api.put includes the Authorization header.
+ * Asks for permission, fetches the Expo push token and registers it with the
+ * API. Safe to call on every signed-in launch: the token can rotate, and the
+ * vendor may grant permission later from Settings. Requires a stored JWT.
  */
 export async function registerPushToken(): Promise<void> {
   const { status: existing } = await Notifications.getPermissionsAsync();
   let finalStatus = existing;
-  if (existing !== 'granted') {
+  if (existing !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
-  if (finalStatus !== 'granted') return;
+  if (finalStatus !== "granted") {
+    log.info("push permission not granted", { status: finalStatus });
+    return;
+  }
 
-  if (Platform.OS === 'android') {
-    // Default channel (keep for backwards compat)
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'General',
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "General",
       importance: Notifications.AndroidImportance.DEFAULT,
     });
-    // New-request channel: triple vibration + custom chime
-    await Notifications.setNotificationChannelAsync('new-request', {
-      name: 'New Part Requests',
+    await Notifications.setNotificationChannelAsync("new-request", {
+      name: "New Part Requests",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 400, 150, 400, 150, 400],
-      sound: 'notification_request.wav',
+      sound: "notification_request.wav",
       enableVibrate: true,
     });
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const projectId =
+    (Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined)?.projectId ??
+    (Constants.easConfig as { projectId?: string } | undefined)?.projectId;
+
+  let token: string;
   try {
-    await api.put('/vendor-auth/push-token', { token: tokenData.data });
-  } catch (e) {
-    console.warn('[notifications] push token registration failed:', e);
+    token = (await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)).data;
+  } catch (err) {
+    // Expo Go and simulators have no push token — expected there.
+    log.warn("no push token available", err);
+    return;
+  }
+  if (token === lastRegisteredToken) return;
+
+  try {
+    await vendorAuthApi.registerPushToken(token);
+    lastRegisteredToken = token;
+  } catch (err) {
+    log.warn("push token registration failed", err);
   }
 }
 
+/** Forget the cached token on sign-out so the next vendor re-registers. */
+export function resetPushRegistration(): void {
+  lastRegisteredToken = null;
+}
+
 /**
- * Sets up foreground and tap notification listeners.
- *
- * @param navigateToAssignment - called with the assignmentId when the vendor
- *   taps an inbox push notification; navigate to RequestDetail with this ID.
- * @param navigateToOrder - called with the orderId (== assignmentId) when the
- *   vendor taps an order-paid push notification; navigate to OrderDetail.
- * @returns cleanup function — call it in a useEffect return or on unmount.
+ * Wires notification taps to navigation, including the cold-start case where
+ * the app was launched *by* the tap and the response listener never fires.
  */
-export function setupNotificationListeners(
-  navigateToAssignment: (assignmentId: string) => void,
-  navigateToOrder: (orderId: string) => void,
-): () => void {
-  // Foreground: notification received while app is open (just log; alert is
-  // already shown by setNotificationHandler above).
-  const foregroundSub = Notifications.addNotificationReceivedListener(
-    (notification) => {
-      console.log('[notifications] received in foreground:', notification.request.identifier);
-    },
-  );
+export function setupNotificationListeners(onOpen: (target: NotificationTarget) => void): () => void {
+  const tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const target = targetFromData(response.notification.request.content.data as Record<string, unknown>);
+    if (target) onOpen(target);
+  });
 
-  // Tap: vendor tapped the notification banner/tray.
-  const tapSub = Notifications.addNotificationResponseReceivedListener(
-    (response) => {
-      const data = response.notification.request.content.data as Record<string, unknown>;
-      const screen = typeof data?.screen === 'string' ? data.screen : undefined;
-      const assignmentId = typeof data?.assignmentId === 'string' ? data.assignmentId : undefined;
-      if (screen === 'orders' && assignmentId) {
-        navigateToOrder(assignmentId);
-      } else if (assignmentId) {
-        navigateToAssignment(assignmentId);
-      }
-    },
-  );
+  void Notifications.getLastNotificationResponseAsync().then((response) => {
+    if (!response) return;
+    const target = targetFromData(response.notification.request.content.data as Record<string, unknown>);
+    if (target) onOpen(target);
+  });
 
-  return () => {
-    foregroundSub.remove();
-    tapSub.remove();
-  };
+  return () => tapSub.remove();
+}
+
+export async function clearBadge(): Promise<void> {
+  await Notifications.setBadgeCountAsync(0).catch(() => {});
 }

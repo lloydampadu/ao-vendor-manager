@@ -8,6 +8,7 @@ import LightListingsScreen from "../screens/LightListingsScreen";
 import AddEditLightListingScreen from "../screens/AddEditLightListingScreen";
 import AddEditPartListingScreen from "../screens/AddEditPartListingScreen";
 import type { TyreListing, LightListing } from "@/lib/db";
+import type { ApiProduct } from "@/lib/api";
 import { isTyreVendor, isLightVendor } from "@/lib/parts-catalog";
 import { useAuthStore } from "@/store/auth-store";
 import { useThemeColors } from "../../constants/theme";
@@ -16,10 +17,10 @@ export type ProductsStackParamList = {
   PartListings: undefined;
   AddPartWizard: undefined;
   TyreListings: undefined;
-  AddEditTyreListing: { listing?: TyreListing };
+  AddEditTyreListing: { listing?: TyreListing } | undefined;
   LightListings: undefined;
-  AddEditLightListing: { listing?: LightListing };
-  AddEditPartListing: { category: string };
+  AddEditLightListing: { listing?: LightListing } | undefined;
+  AddEditPartListing: { category: string; product?: ApiProduct };
 };
 
 const Stack = createNativeStackNavigator<ProductsStackParamList>();
@@ -38,34 +39,19 @@ export default function ProductsStackNavigator(): React.JSX.Element {
       screenOptions={{
         headerStyle: { backgroundColor: C.white },
         headerTintColor: C.black,
-        headerTitleStyle: { color: C.black },
+        headerTitleStyle: { color: C.black, fontFamily: "bold" },
+        headerBackTitle: "Back",
       }}
     >
-      <Stack.Screen
-        name="PartListings"
-        component={PartListingsScreen}
-        options={{ title: "My Parts" }}
-      />
-      <Stack.Screen
-        name="AddPartWizard"
-        component={AddPartWizardScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="TyreListings"
-        component={TyreListingsScreen}
-        options={{ title: "My Tyres" }}
-      />
+      <Stack.Screen name="PartListings" component={PartListingsScreen} options={{ title: "My Parts" }} />
+      <Stack.Screen name="AddPartWizard" component={AddPartWizardScreen} options={{ title: "Add a part", headerShown: true }} />
+      <Stack.Screen name="TyreListings" component={TyreListingsScreen} options={{ title: "My Tyres" }} />
       <Stack.Screen
         name="AddEditTyreListing"
         component={AddEditTyreListingScreen}
         options={({ route }) => ({ title: route.params?.listing ? "Edit Tyre" : "Add Tyre" })}
       />
-      <Stack.Screen
-        name="LightListings"
-        component={LightListingsScreen}
-        options={{ title: "My Lights" }}
-      />
+      <Stack.Screen name="LightListings" component={LightListingsScreen} options={{ title: "My Lights" }} />
       <Stack.Screen
         name="AddEditLightListing"
         component={AddEditLightListingScreen}
@@ -74,7 +60,7 @@ export default function ProductsStackNavigator(): React.JSX.Element {
       <Stack.Screen
         name="AddEditPartListing"
         component={AddEditPartListingScreen}
-        options={({ route }) => ({ title: `Add ${route.params.category} Part` })}
+        options={({ route }) => ({ title: route.params.product ? "Edit Part" : `Add ${route.params.category} Part` })}
       />
     </Stack.Navigator>
   );
