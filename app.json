@@ -59,7 +59,7 @@
       [
         "@sentry/react-native/expo",
         {
-          "organization": "abosseyokai",
+          "organization": "abossey-okai-direct",
           "project": "ao-vendor-manager",
           "url": "https://sentry.io/"
         }
