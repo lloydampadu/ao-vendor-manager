@@ -39,8 +39,10 @@ export const PART_CATEGORIES: Record<string, string[]> = {
 export const TYRES_SPECIALTY = "Tyres";
 
 // True when the vendor onboarded as a tyre seller (see TYRES_SPECIALTY).
-export function isTyreVendor(specialties?: string[] | null): boolean {
-  return !!specialties?.includes(TYRES_SPECIALTY);
+export function isTyreVendor(specialties?: string[] | null, categories?: string[] | null): boolean {
+  if (specialties?.includes(TYRES_SPECIALTY)) return true;
+  if (categories && categories.length > 0 && categories.every((c) => c === "Tyres")) return true;
+  return false;
 }
 
 // Lamp/light vendors have a dedicated listing screen.

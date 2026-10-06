@@ -27,7 +27,7 @@ const Stack = createNativeStackNavigator<ProductsStackParamList>();
 export default function ProductsStackNavigator(): React.JSX.Element {
   const C = useThemeColors();
   const vendor = useAuthStore((s) => s.vendor);
-  const initialRoute = isTyreVendor(vendor?.specialties)
+  const initialRoute = isTyreVendor(vendor?.specialties, vendor?.categories)
     ? "TyreListings"
     : isLightVendor(vendor?.specialties, vendor?.categories)
     ? "LightListings"
