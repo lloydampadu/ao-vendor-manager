@@ -29,7 +29,7 @@ export default function ProductsStackNavigator(): React.JSX.Element {
   const vendor = useAuthStore((s) => s.vendor);
   const initialRoute = isTyreVendor(vendor?.specialties)
     ? "TyreListings"
-    : isLightVendor(vendor?.specialties)
+    : isLightVendor(vendor?.specialties, vendor?.categories)
     ? "LightListings"
     : "ProductsList";
   return (

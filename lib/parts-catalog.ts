@@ -43,12 +43,14 @@ export function isTyreVendor(specialties?: string[] | null): boolean {
   return !!specialties?.includes(TYRES_SPECIALTY);
 }
 
-// Lamp/light vendors have a dedicated listing screen instead of the general parts list.
-// Specialties stores individual part names (e.g. "Headlight Assembly") not category names,
-// so we check whether a non-empty specialties list consists entirely of Lamps-category parts.
+// Lamp/light vendors have a dedicated listing screen.
+// A vendor is a light vendor if:
+//   - Their categories (routing groups) contains only "Lamps", OR
+//   - Their specialties (parts they stock) are all Lamps-category parts.
 const LAMPS_PARTS = new Set(PART_CATEGORIES["Lamps"] ?? []);
 
-export function isLightVendor(specialties?: string[] | null): boolean {
+export function isLightVendor(specialties?: string[] | null, categories?: string[] | null): boolean {
+  if (categories && categories.length > 0 && categories.every((c) => c === "Lamps")) return true;
   if (!specialties || specialties.length === 0) return false;
   return specialties.every((s) => LAMPS_PARTS.has(s));
 }
