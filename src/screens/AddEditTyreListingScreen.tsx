@@ -1,381 +1,134 @@
-import React, { useState, useEffect } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
-import { uploadImage } from "@/lib/upload";
-import {
-  initDb,
-  upsertTyreListing,
-  enqueueTyreListing,
-  getCachedTyreCatalog,
-} from "@/lib/db";
-import type { TyreListing, CatalogBrand } from "@/lib/db";
-import { useSyncStore } from "@/store/sync-store";
-import SelectField from "../../components/Reusable/SelectField";
+import { getCachedTyreCatalog, type TyreListing } from "@/lib/db";
+import { newLocalId, saveTyreListing } from "@/lib/listings";
+import { parseJson } from "@/lib/assignment-status";
 import { WIDTHS, HEIGHTS, DIAMETERS } from "@/lib/tyre-sizes";
-import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
-import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
+import { useSyncStore } from "@/store/sync-store";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
+import SelectField from "../../components/Reusable/SelectField";
+import { ReusableBtn, HeightSpacer, FormField, FormInput, SegmentedButtons, StockToggle, PhotoGrid, ReusableText } from "../../components";
+import { SIZES, useThemeColors } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
 type RouteProps = RouteProp<ProductsStackParamList, "AddEditTyreListing">;
-type Colors = typeof LIGHT_COLORS;
 
 const CONDITIONS = ["NEW", "USED"] as const;
 type Condition = (typeof CONDITIONS)[number];
+const CONDITION_LABEL: Record<Condition, string> = { NEW: "Brand New", USED: "Home Used" };
 
-const CONDITION_LABEL: Record<Condition, string> = {
-  NEW: "New",
-  USED: "Used",
-};
-
-// Ghanaian vendors pick the kind of tyre, not an exact product name — this maps
-// to the customer-facing "Tyre type" categories. Stored in the listing's model
-// field.
+// Vendors pick the kind of tyre rather than an exact product name; this maps to
+// the customer-facing "Tyre type" categories and is stored in `model`.
 const TYRE_TYPES = ["All-Season", "Performance", "Off-road", "Standard"];
+
+const MAX_PHOTOS = 4;
 
 export default function AddEditTyreListingScreen(): React.JSX.Element {
   const C = useThemeColors();
   const nav = useNavigation();
   const route = useRoute<RouteProps>();
-  const existing = route.params?.listing as TyreListing | undefined;
-  const { startSync } = useSyncStore();
-
-  const existingPhotos: string[] = (() => {
-    try { return existing ? (JSON.parse(existing.photos) as string[]) : []; } catch { return []; }
-  })();
+  const existing = route.params?.listing;
+  const startSync = useSyncStore((s) => s.startSync);
 
   const [width, setWidth] = useState(existing ? String(existing.width) : "");
   const [height, setHeight] = useState(existing ? String(existing.height) : "");
   const [diameter, setDiameter] = useState(existing ? String(existing.diameter) : "");
   const [brand, setBrand] = useState(existing?.brand ?? "");
   const [model, setModel] = useState(existing?.model ?? "");
-  const [condition, setCondition] = useState<Condition>((existing?.condition as Condition) ?? "NEW");
+  const [condition, setCondition] = useState<Condition>(existing?.condition === "USED" ? "USED" : "NEW");
   const [price, setPrice] = useState(existing ? String(existing.price_ghs) : "");
   const [inStock, setInStock] = useState(existing ? existing.in_stock === 1 : true);
-  const [photos, setPhotos] = useState<string[]>(existingPhotos);
-  const [localUris, setLocalUris] = useState<string[]>(existingPhotos);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [catalog, setCatalog] = useState<CatalogBrand[]>([]);
+  const [brandNames, setBrandNames] = useState<string[]>([]);
+  const photos = usePhotoUpload({ max: MAX_PHOTOS, allowDeferred: true, initial: existing ? parseJson<string[]>(existing.photos, []) : [] });
 
   useEffect(() => {
-    void (async () => {
-      await initDb();
-      setCatalog(await getCachedTyreCatalog());
-    })();
+    getCachedTyreCatalog()
+      .then((catalog) => setBrandNames(catalog.map((b) => b.brandName).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))))
+      .catch(() => setBrandNames([]));
   }, []);
 
-  const brandNames = catalog
-    .map((b) => b.brandName)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-
-  async function pickPhoto(): Promise<void> {
-    if (photos.length >= 4) {
-      Alert.alert("You can only add 4 photos");
-      return;
-    }
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert("Camera needed", "Please allow camera access to add tyre photos."); return; }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (result.canceled || !result.assets[0]) return;
-    const localUri = result.assets[0].uri;
-    setLocalUris((prev) => [...prev, localUri]);
-    setUploading(true);
-    try {
-      const url = await uploadImage(localUri);
-      setPhotos((prev) => [...prev, url]);
-    } catch (e) {
-      setLocalUris((prev) => prev.filter((u) => u !== localUri));
-      Alert.alert("Photo not uploaded", "The photo didn't go through. Check your connection and try again.");
-    } finally {
-      setUploading(false);
-    }
+  function validate(): { w: number; h: number; d: number; priceGhs: number } | null {
+    const w = parseInt(width, 10), h = parseInt(height, 10), d = parseInt(diameter, 10), priceGhs = parseInt(price, 10);
+    if (!(w > 0)) { Alert.alert("Tyre width", "Enter a valid width, e.g. 205."); return null; }
+    if (!(h > 0)) { Alert.alert("Tyre height", "Enter a valid height, e.g. 55."); return null; }
+    if (!(d > 0)) { Alert.alert("Rim size", "Enter a valid rim diameter, e.g. 16."); return null; }
+    if (!brand.trim()) { Alert.alert("Brand", "Choose or type the tyre brand."); return null; }
+    if (!model.trim()) { Alert.alert("Tyre type", "Choose the tyre type."); return null; }
+    if (!(priceGhs > 0)) { Alert.alert("Price", "Enter a valid price in GHS."); return null; }
+    if (photos.uploading) { Alert.alert("Please wait", "A photo is still uploading."); return null; }
+    if (photos.urls.length === 0) { Alert.alert("Photo needed", "Add at least one photo of the tyre."); return null; }
+    return { w, h, d, priceGhs };
   }
 
   async function save(): Promise<void> {
-    const w = parseInt(width, 10);
-    const h = parseInt(height, 10);
-    const d = parseInt(diameter, 10);
-    if (!w || w <= 0) { Alert.alert("Please enter a valid tyre width (e.g. 205)"); return; }
-    if (!h || h <= 0) { Alert.alert("Please enter a valid tyre height (e.g. 55)"); return; }
-    if (!d || d <= 0) { Alert.alert("Please enter a valid rim diameter (e.g. 16)"); return; }
-    if (!brand.trim()) { Alert.alert("Please enter the brand name"); return; }
-    if (!model.trim()) { Alert.alert("Please choose the tyre type"); return; }
-    const priceGhs = parseInt(price, 10);
-    if (!priceGhs || priceGhs <= 0) { Alert.alert("Please enter a valid price"); return; }
-    if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
-    if (photos.filter(Boolean).length === 0) { Alert.alert("Please add at least one photo of the tyre"); return; }
-
+    const v = validate();
+    if (!v) return;
     setSaving(true);
     try {
-      await initDb();
-      const now = new Date().toISOString();
-      const listingId = existing?.id ?? `local-${Date.now()}`;
-
-      const listing: TyreListing = {
-        id: listingId,
+      const row: TyreListing = {
+        id: existing?.id ?? newLocalId(),
         server_id: existing?.server_id ?? null,
-        width: w,
-        height: h,
-        diameter: d,
-        brand: brand.trim(),
-        model: model.trim(),
-        condition,
-        price_ghs: priceGhs,
-        photos: JSON.stringify(photos.filter(Boolean)),
+        width: v.w, height: v.h, diameter: v.d,
+        brand: brand.trim(), model: model.trim(), condition,
+        price_ghs: v.priceGhs,
+        photos: JSON.stringify(photos.urls),
         in_stock: inStock ? 1 : 0,
-        updated_at: now,
+        updated_at: new Date().toISOString(),
       };
-
-      const op = existing ? "update" : "create";
-      await enqueueTyreListing({
-        id: `${op}-${listingId}-${Date.now()}`,
-        op,
-        listing_id: listingId,
-        payload: JSON.stringify({
-          server_id: existing?.server_id ?? null,
-          width: w,
-          height: h,
-          diameter: d,
-          brand: brand.trim(),
-          model: model.trim(),
-          condition,
-          priceGhs,
-          photos: photos.filter(Boolean),
-          inStock,
-        }),
-        synced: 0,
-        error: null,
-        created_at: now,
-      });
-
-      await upsertTyreListing(listing);
-
-      // Fire-and-forget — sync flushes the queue when online
+      await saveTyreListing(row, !existing);
       void startSync();
-
       nav.goBack();
-    } catch (e: unknown) {
-      Alert.alert("Couldn't save", "Something went wrong on our end. Please try again.");
+    } catch {
+      Alert.alert("Couldn't save", "Something went wrong saving on this phone. Please try again.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: C.offwhite }]}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Size selectors */}
+    <ScrollView style={[styles.container, { backgroundColor: C.offwhite }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.sizeRow}>
-        <View style={[styles.sizeField, { flex: 1 }]}>
-          <SelectField
-            label="Width (mm) *"
-            value={width}
-            onChange={setWidth}
-            options={WIDTHS.map(String)}
-            placeholder="205"
-            keyboardType="number-pad"
-          />
-        </View>
-        <View style={[styles.sizeField, { flex: 1 }]}>
-          <SelectField
-            label="Height (%) *"
-            value={height}
-            onChange={setHeight}
-            options={HEIGHTS.map(String)}
-            placeholder="55"
-            keyboardType="number-pad"
-          />
-        </View>
-        <View style={[styles.sizeField, { flex: 1 }]}>
-          <SelectField
-            label={'Rim (") *'}
-            value={diameter}
-            onChange={setDiameter}
-            options={DIAMETERS.map(String)}
-            placeholder="16"
-            keyboardType="number-pad"
-          />
-        </View>
+        <View style={{ flex: 1 }}><SelectField label="Width (mm) *" value={width} onChange={setWidth} options={WIDTHS.map(String)} placeholder="205" keyboardType="number-pad" /></View>
+        <View style={{ flex: 1 }}><SelectField label="Height (%) *" value={height} onChange={setHeight} options={HEIGHTS.map(String)} placeholder="55" keyboardType="number-pad" /></View>
+        <View style={{ flex: 1 }}><SelectField label={'Rim (") *'} value={diameter} onChange={setDiameter} options={DIAMETERS.map(String)} placeholder="16" keyboardType="number-pad" /></View>
       </View>
 
-      <SelectField
-        label="Brand *"
-        value={brand}
-        onChange={setBrand}
-        options={brandNames}
-        placeholder="Select brand"
-      />
+      <SelectField label="Brand *" value={brand} onChange={setBrand} options={brandNames} placeholder="Select brand" />
+      <SelectField label="Tyre type *" value={model} onChange={setModel} options={TYRE_TYPES} placeholder="Select tyre type" />
 
-      <SelectField
-        label="Tyre type *"
-        value={model}
-        onChange={setModel}
-        options={TYRE_TYPES}
-        placeholder="Select tyre type"
-      />
+      <FormField label="Condition">
+        <SegmentedButtons options={CONDITIONS} value={condition} onChange={setCondition} labels={CONDITION_LABEL} />
+      </FormField>
 
-      <Field label="Condition" C={C}>
-        <View style={styles.conditionRow}>
-          {CONDITIONS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[
-                styles.conditionBtn,
-                { borderColor: C.gray, backgroundColor: C.white },
-                condition === c && { backgroundColor: C.primary, borderColor: C.primary },
-              ]}
-              onPress={() => setCondition(c)}
-            >
-              <ReusableText
-                text={CONDITION_LABEL[c]}
-                family="medium"
-                size={13}
-                color={condition === c ? C.white : C.gray2}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Field>
+      <FormField label="Price (GHS) *">
+        <FormInput value={price} onChangeText={(t) => setPrice(t.replace(/[^\d]/g, ""))} keyboardType="number-pad" placeholder="e.g. 850" />
+      </FormField>
 
-      <Field label="Price (GHS) *" C={C}>
-        <TextInput
-          style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-          value={price}
-          onChangeText={setPrice}
-          keyboardType="number-pad"
-          placeholder="e.g. 850"
-          placeholderTextColor={C.gray2}
-        />
-      </Field>
+      <FormField label={`Photos (${photos.photos.length}/${MAX_PHOTOS}) *`}>
+        <PhotoGrid photos={photos.photos} canAddMore={photos.canAddMore} onAdd={() => void photos.capture()} onRemove={photos.remove} />
+        {photos.hasDeferred && (<><HeightSpacer height={6} /><ReusableText text="You're offline — photos upload automatically when you reconnect." family="regular" size={11} color={C.gray2} /></>)}
+      </FormField>
 
-      <Field label={`Photos (${localUris.length}/4)`} C={C}>
-        <View style={styles.photoGrid}>
-          {localUris.map((uri, i) => (
-            <View key={i} style={styles.photoWrapper}>
-              <Image source={uri} style={styles.photo} contentFit="cover" cachePolicy="disk" />
-              <TouchableOpacity
-                style={styles.removePhoto}
-                onPress={() => {
-                  setLocalUris((prev) => prev.filter((_, j) => j !== i));
-                  setPhotos((prev) => prev.filter((_, j) => j !== i));
-                }}
-              >
-                <Ionicons name="close-circle" size={20} color={C.red} />
-              </TouchableOpacity>
-            </View>
-          ))}
-          {localUris.length < 4 && (
-            <TouchableOpacity
-              style={[styles.addPhoto, { borderColor: C.primary, backgroundColor: C.primary1 }]}
-              onPress={() => void pickPhoto()}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <ActivityIndicator color={C.primary} />
-              ) : (
-                <Ionicons name="camera-outline" size={28} color={C.primary} />
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
-      </Field>
+      <StockToggle inStock={inStock} onToggle={() => setInStock((v) => !v)} />
 
-      <TouchableOpacity
-        style={[styles.stockToggle, inStock ? styles.stockIn : styles.stockOut]}
-        onPress={() => setInStock((v) => !v)}
-      >
-        <Ionicons name={inStock ? "checkmark-circle" : "close-circle"} size={20} color={inStock ? "#16a34a" : C.red} />
-        <ReusableText
-          text={`${inStock ? "In Stock" : "Out of Stock"} — tap to toggle`}
-          family="medium"
-          size={14}
-          color={inStock ? "#16a34a" : C.red}
-        />
-      </TouchableOpacity>
-
-      <HeightSpacer height={4} />
       <ReusableBtn
         onPress={() => void save()}
-        btnText={saving ? "Saving…" : uploading ? "Uploading photo…" : existing ? "Save Changes" : "Add Tyre Listing"}
-        backgroundColor={saving || uploading ? C.gray2 : C.primary}
+        btnText={saving ? "Saving…" : photos.uploading ? "Uploading photo…" : existing ? "Save changes" : "Add tyre listing"}
+        backgroundColor={saving || photos.uploading ? C.gray2 : C.primary}
         textColor={C.white}
-        width="100%"
         height={52}
         borderRadius={12}
         fontSize={SIZES.medium}
+        disabled={saving || photos.uploading}
       />
     </ScrollView>
-  );
-}
-
-function Field({ label, children, C }: { label: string; children: React.ReactNode; C: Colors }) {
-  return (
-    <View style={styles.field}>
-      <ReusableText text={label} family="bold" size={SIZES.xSmall} color={C.primary} />
-      <HeightSpacer height={6} />
-      {children}
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
-  field: { marginBottom: 16 },
   sizeRow: { flexDirection: "row", gap: 8 },
-  sizeField: {},
-  input: {
-    borderRadius: 10,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: SIZES.medium,
-    fontFamily: "regular",
-  },
-  conditionRow: { flexDirection: "row", gap: 8 },
-  conditionBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    padding: 10,
-    alignItems: "center",
-  },
-  photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  photoWrapper: { position: "relative" },
-  photo: { width: 80, height: 80, borderRadius: 8 },
-  removePhoto: { position: "absolute", top: -6, right: -6 },
-  addPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  stockToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  stockIn: { backgroundColor: "#f0fdf4", borderColor: "#86efac" },
-  stockOut: { backgroundColor: "#fef2f2", borderColor: "#fca5a5" },
 });

@@ -9,24 +9,21 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { api } from "@/lib/api";
+import { errorMessage, vendorAuthApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { PART_CATEGORIES, CATEGORY_ICONS, TYRES_SPECIALTY, isTyreVendor } from "@/lib/parts-catalog";
 import { ReusableText, HeightSpacer } from "../../components";
 import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
-import type { RootStackParamList } from "../navigation/RootNavigator";
-
-type Props = NativeStackScreenProps<RootStackParamList, "Onboarding">;
 
 const CATEGORIES = Object.keys(PART_CATEGORIES);
 
 type SectionData = { category: string; item: string };
 
-export default function OnboardingScreen({ navigation }: Props): React.JSX.Element {
+export default function OnboardingScreen(): React.JSX.Element {
   const C = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { vendor, setVendor } = useAuthStore();
+  const vendor = useAuthStore((s) => s.vendor);
+  const setVendor = useAuthStore((s) => s.setVendor);
 
   const [selected, setSelected] = useState<Set<string>>(
     // Never seed the tyres marker into the parts set — tyres is its own mode.
@@ -105,27 +102,15 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
     setSaving(true);
     try {
       const specialties = tyres ? [TYRES_SPECIALTY] : Array.from(selected);
-      const { specialties: saved, categories } = await api.patch<{
-        specialties: string[];
-        categories: string[];
-      }>("/vendor-auth/specialties", { specialties });
+      const { specialties: saved, categories } = await vendorAuthApi.setSpecialties(specialties);
 
-      if (tyres) {
-        // Tyres fit all cars, so brands don't apply — set "ALL" and skip the
-        // brands step, going straight into the app.
-        const { brands } = await api.patch<{ brands: string[] }>(
-          "/vendor-auth/brands",
-          { brands: ["ALL"] }
-        );
-        if (vendor) setVendor({ ...vendor, specialties: saved, categories, brands });
-        navigation.reset({ index: 0, routes: [{ name: "Main" }] });
-        return;
-      }
-
-      if (vendor) setVendor({ ...vendor, specialties: saved, categories });
-      navigation.navigate("OnboardingBrands");
+      // Tyres fit all cars, so brands don't apply — set "ALL" so the navigator
+      // skips the brands step and goes straight into the app.
+      const brands = tyres ? (await vendorAuthApi.setBrands(["ALL"])).brands : vendor?.brands ?? [];
+      // Updating the store moves the navigator to the next step (brands or main).
+      if (vendor) setVendor({ ...vendor, specialties: saved, categories, brands });
     } catch (e) {
-      Alert.alert("Couldn't save", "Something went wrong. Please try again.");
+      Alert.alert("Couldn't save", errorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -202,11 +187,7 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
             >
               <View style={styles.sectionLeft}>
                 <View style={[styles.catIcon, { backgroundColor: count > 0 ? C.primary : C.gray }]}>
-                  <Ionicons
-                    name={icon as any}
-                    size={18}
-                    color={C.white}
-                  />
+                  <Ionicons name={icon} size={18} color={C.white} />
                 </View>
                 <View style={{ marginLeft: 12 }}>
                   <ReusableText text={section.title} family="bold" size={15} color={C.secondary} />
