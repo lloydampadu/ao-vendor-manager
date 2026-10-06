@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { getToken, notifyUnauthorized } from "./auth";
 import { createLogger } from "./logger";
 import { ApiError, extractMessage } from "./api-error";
@@ -8,6 +9,9 @@ const log = createLogger("api");
 
 export const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 const TIMEOUT_MS = 15_000;
+
+/** Sent on every request so the admin control room can see which app build each vendor runs. */
+export const APP_VERSION: string = Constants.expoConfig?.version ?? "dev";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const controller = new AbortController();
@@ -21,6 +25,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
         signal: controller.signal,
         headers: {
           Accept: "application/json",
+          "X-App-Version": APP_VERSION,
           ...(init.body ? { "Content-Type": "application/json" } : {}),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(init.headers ?? {}),

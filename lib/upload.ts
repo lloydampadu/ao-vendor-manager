@@ -1,5 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { API_BASE, ApiError } from "./api";
+import { API_BASE, APP_VERSION, ApiError } from "./api";
 import { getToken } from "./auth";
 
 const TIMEOUT_MS = 60_000;
@@ -42,7 +42,7 @@ export async function uploadImage(uri: string): Promise<string> {
         httpMethod: "POST",
         uploadType: FileSystem.FileSystemUploadType.MULTIPART,
         mimeType: mimeTypeFor(uri),
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "X-App-Version": APP_VERSION },
       }).catch(() => {
         throw new ApiError("Network request failed", 0);
       }),
