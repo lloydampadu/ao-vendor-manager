@@ -24,11 +24,11 @@ import type { ProductsStackParamList } from "../navigation/ProductsStackNavigato
 type RouteProps = RouteProp<ProductsStackParamList, "AddEditPartListing">;
 type Colors = typeof LIGHT_COLORS;
 
-const SIDES = ["Left", "Right", "Both", "N/A"] as const;
-type Side = (typeof SIDES)[number];
+const SIDES = ["Left", "Right", "Both"] as const;
+type Side = (typeof SIDES)[number] | "";
 
-const POSITIONS = ["Front", "Rear", "N/A"] as const;
-type Position = (typeof POSITIONS)[number];
+const POSITIONS = ["Front", "Rear"] as const;
+type Position = (typeof POSITIONS)[number] | "";
 
 const CONDITIONS = ["NEW", "USED"] as const;
 type Condition = (typeof CONDITIONS)[number];
@@ -78,8 +78,8 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const specialtyChips = (vendor?.specialties ?? []).filter((s) => categorySet.has(s));
 
   const [partType, setPartType] = useState("");
-  const [side, setSide] = useState<Side>("N/A");
-  const [position, setPosition] = useState<Position>("N/A");
+  const [side, setSide] = useState<Side>("");
+  const [position, setPosition] = useState<Position>("");
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
@@ -179,14 +179,16 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
 
   async function save(): Promise<void> {
     if (!partType.trim()) { Alert.alert("Please select the part type"); return; }
+    if (config.hasSide && !side) { Alert.alert("Please select a side (Left, Right, or Both)"); return; }
+    if (config.hasPosition && !position) { Alert.alert("Please select a position (Front or Rear)"); return; }
     const priceGhs = parseInt(price, 10);
     if (!priceGhs || priceGhs <= 0) { Alert.alert("Please enter a valid price"); return; }
     if (uploading) { Alert.alert("Please wait", "Photo is still uploading"); return; }
 
     // Build a descriptive name from structured inputs
     const parts: string[] = [partType.trim()];
-    if (config.hasSide && side !== "N/A") parts.push(side);
-    if (config.hasPosition && position !== "N/A") parts.push(position);
+    if (config.hasSide && side) parts.push(side);
+    if (config.hasPosition && position) parts.push(position);
     if (make) {
       const fitment = [make, model, year].filter(Boolean).join(" ");
       parts.push(fitment);
