@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { uploadImage } from "@/lib/upload";
 import { initDb, upsertLightListing, enqueueLightListing } from "@/lib/db";
 import type { LightListing } from "@/lib/db";
 import { PART_CATEGORIES } from "@/lib/parts-catalog";
+import { vehicleApi } from "@/lib/api";
 import { useSyncStore } from "@/store/sync-store";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
@@ -54,6 +55,9 @@ const CONDITION_LABEL: Record<Condition, string> = {
   USED: "Home Used",
 };
 
+const CURRENT_YEAR = 2026;
+const YEARS = Array.from({ length: CURRENT_YEAR - 1980 + 1 }, (_, i) => String(CURRENT_YEAR - i));
+
 export default function AddEditLightListingScreen(): React.JSX.Element {
   const C = useThemeColors();
   const nav = useNavigation();
@@ -79,6 +83,32 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
   const [uploading, setUploading] = useState(false);
   const [showFullList, setShowFullList] = useState(false);
   const [fullListSearch, setFullListSearch] = useState("");
+
+  // Vehicle dropdowns
+  const [makes, setMakes] = useState<string[]>([]);
+  const [models, setModels] = useState<string[]>([]);
+  const [makesLoading, setMakesLoading] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [showMakePicker, setShowMakePicker] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
+
+  useEffect(() => {
+    setMakesLoading(true);
+    vehicleApi.getMakes()
+      .then((res) => setMakes(res.makes))
+      .catch(() => { /* offline — vendor can still type if needed */ })
+      .finally(() => setMakesLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!make) { setModels([]); return; }
+    setModelsLoading(true);
+    vehicleApi.getModels(make)
+      .then((res) => setModels(res.models))
+      .catch(() => setModels([]))
+      .finally(() => setModelsLoading(false));
+  }, [make]);
 
   const filteredFullList = fullListSearch.trim()
     ? ALL_LIGHT_TYPES.filter((t) => t.toLowerCase().includes(fullListSearch.toLowerCase()))
@@ -248,43 +278,60 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
           </View>
         </Field>
 
-        {/* Vehicle make/model/year */}
-        <View style={styles.threeRow}>
-          <View style={{ flex: 2 }}>
-            <Field label="Make" C={C}>
-              <TextInput
-                style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-                value={make}
-                onChangeText={setMake}
-                placeholder="Toyota"
-                placeholderTextColor={C.gray2}
-              />
-            </Field>
-          </View>
-          <View style={{ width: 8 }} />
-          <View style={{ flex: 2 }}>
+        {/* Vehicle make/model/year — dropdown selectors */}
+        <Field label="Make" C={C}>
+          <TouchableOpacity
+            style={[styles.select, { backgroundColor: C.white, borderColor: C.gray }]}
+            onPress={() => setShowMakePicker(true)}
+          >
+            <ReusableText
+              text={make || "Select make"}
+              family="regular"
+              size={SIZES.medium}
+              color={make ? C.secondary : C.gray2}
+            />
+            {makesLoading
+              ? <ActivityIndicator size="small" color={C.gray2} />
+              : <Ionicons name="chevron-down" size={16} color={C.gray2} />
+            }
+          </TouchableOpacity>
+        </Field>
+
+        <View style={styles.twoRow}>
+          <View style={{ flex: 1 }}>
             <Field label="Model" C={C}>
-              <TextInput
-                style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-                value={model}
-                onChangeText={setModel}
-                placeholder="Corolla"
-                placeholderTextColor={C.gray2}
-              />
+              <TouchableOpacity
+                style={[styles.select, { backgroundColor: make ? C.white : C.offwhite, borderColor: C.gray }]}
+                onPress={() => { if (make) setShowModelPicker(true); }}
+              >
+                <ReusableText
+                  text={model || (make ? "Select model" : "Pick make first")}
+                  family="regular"
+                  size={SIZES.medium}
+                  color={model ? C.secondary : C.gray2}
+                />
+                {modelsLoading
+                  ? <ActivityIndicator size="small" color={C.gray2} />
+                  : <Ionicons name="chevron-down" size={16} color={C.gray2} />
+                }
+              </TouchableOpacity>
             </Field>
           </View>
           <View style={{ width: 8 }} />
           <View style={{ flex: 1 }}>
             <Field label="Year" C={C}>
-              <TextInput
-                style={[styles.input, { backgroundColor: C.white, borderColor: C.gray, color: C.secondary }]}
-                value={year}
-                onChangeText={setYear}
-                placeholder="2018"
-                placeholderTextColor={C.gray2}
-                keyboardType="number-pad"
-                maxLength={4}
-              />
+              <TouchableOpacity
+                style={[styles.select, { backgroundColor: C.white, borderColor: C.gray }]}
+                onPress={() => setShowYearPicker(true)}
+              >
+                <ReusableText
+                  text={year || "Select year"}
+                  family="regular"
+                  size={SIZES.medium}
+                  color={year ? C.secondary : C.gray2}
+                />
+                <Ionicons name="chevron-down" size={16} color={C.gray2} />
+              </TouchableOpacity>
             </Field>
           </View>
         </View>
@@ -385,6 +432,39 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
         />
       </ScrollView>
 
+      {/* Make picker */}
+      <PickerModal
+        visible={showMakePicker}
+        title="Select Make"
+        items={makes}
+        selected={make}
+        onSelect={(v) => { setMake(v); setModel(""); setYear(""); setShowMakePicker(false); }}
+        onClose={() => setShowMakePicker(false)}
+        C={C}
+      />
+
+      {/* Model picker */}
+      <PickerModal
+        visible={showModelPicker}
+        title="Select Model"
+        items={models}
+        selected={model}
+        onSelect={(v) => { setModel(v); setShowModelPicker(false); }}
+        onClose={() => setShowModelPicker(false)}
+        C={C}
+      />
+
+      {/* Year picker */}
+      <PickerModal
+        visible={showYearPicker}
+        title="Select Year"
+        items={YEARS}
+        selected={year}
+        onSelect={(v) => { setYear(v); setShowYearPicker(false); }}
+        onClose={() => setShowYearPicker(false)}
+        C={C}
+      />
+
       {/* Full light type list modal */}
       <Modal visible={showFullList} animationType="slide" presentationStyle="pageSheet">
         <View style={[styles.modalContainer, { backgroundColor: C.white }]}>
@@ -441,11 +521,81 @@ function Field({ label, children, C }: { label: string; children: React.ReactNod
   );
 }
 
+function PickerModal({
+  visible, title, items, selected, onSelect, onClose, C,
+}: {
+  visible: boolean;
+  title: string;
+  items: string[];
+  selected: string;
+  onSelect: (v: string) => void;
+  onClose: () => void;
+  C: Colors;
+}): React.JSX.Element {
+  const [search, setSearch] = React.useState("");
+  const filtered = search.trim()
+    ? items.filter((i) => i.toLowerCase().includes(search.toLowerCase()))
+    : items;
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[styles.modalContainer, { backgroundColor: C.white }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: C.gray }]}>
+          <ReusableText text={title} family="bold" size={18} color={C.secondary} />
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={24} color={C.secondary} />
+          </TouchableOpacity>
+        </View>
+        {items.length > 8 && (
+          <View style={[styles.searchWrap, { backgroundColor: C.offwhite }]}>
+            <Ionicons name="search-outline" size={16} color={C.gray2} />
+            <TextInput
+              style={[styles.searchInput, { color: C.secondary }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={`Search ${title.toLowerCase()}…`}
+              placeholderTextColor={C.gray2}
+              autoFocus
+            />
+          </View>
+        )}
+        <ScrollView contentContainerStyle={styles.modalList} keyboardShouldPersistTaps="handled">
+          {filtered.map((item) => (
+            <TouchableOpacity
+              key={item}
+              style={[styles.modalItem, { borderBottomColor: C.gray }, selected === item && { backgroundColor: C.primary1 }]}
+              onPress={() => { onSelect(item); setSearch(""); }}
+            >
+              <ReusableText text={item} family="regular" size={SIZES.medium} color={selected === item ? C.primary : C.secondary} />
+              {selected === item && <Ionicons name="checkmark" size={18} color={C.primary} />}
+            </TouchableOpacity>
+          ))}
+          {filtered.length === 0 && (
+            <View style={{ padding: 32, alignItems: "center" }}>
+              <ReusableText text="No results" family="regular" size={SIZES.medium} color={C.gray2} />
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   field: { marginBottom: 16 },
-  threeRow: { flexDirection: "row", alignItems: "flex-start" },
+  twoRow: { flexDirection: "row", alignItems: "flex-start" },
+
+  select: {
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
 
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

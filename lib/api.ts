@@ -97,6 +97,15 @@ export type ApiLightListing = {
   updatedAt: string;
 };
 
+// ─── Vehicle taxonomy ─────────────────────────────────────────────────────────
+
+export const vehicleApi = {
+  getMakes: () => api.get<{ makes: string[] }>("/vehicles/makes"),
+  getModels: (make: string) => api.get<{ models: string[] }>(`/vehicles/models?make=${encodeURIComponent(make)}`),
+};
+
+// ─── Light listings API calls ─────────────────────────────────────────────────
+
 export const lightListingsApi = {
   getAll: () => api.get<{ listings: ApiLightListing[] }>("/vendor/light-listings"),
   create: (body: unknown) => api.post<{ listing: ApiLightListing }>("/vendor/light-listings", body),

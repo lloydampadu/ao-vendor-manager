@@ -32,6 +32,7 @@ const CATEGORIES: Category[] = [
   { label: "Brakes",      icon: "disc-outline",          value: "SUSPENSION" },
   { label: "Engine",      icon: "settings-outline",      value: "ENGINE_PARTS" },
   { label: "Tyres",       icon: "ellipse-outline",       value: "TYRES" },
+  { label: "Lamps",       icon: "bulb-outline",          value: "LAMPS" },
   { label: "Battery",     icon: "battery-full-outline",  value: "ELECTRICALS" },
   { label: "Electrical",  icon: "flash-outline",         value: "ELECTRICALS" },
   { label: "Body",        icon: "car-outline",           value: "BODY_PARTS" },
@@ -159,7 +160,11 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
               <TouchableOpacity
                 key={cat.value + cat.label}
                 style={[styles.catCard, { backgroundColor: C.white, borderColor: C.gray }, category === cat.label && { borderColor: C.primary, backgroundColor: C.primary1 }]}
-                onPress={() => setCategory(cat.label)}
+                onPress={() => {
+                  if (cat.label === "Tyres") { navigation.replace("AddEditTyreListing", {}); return; }
+                  if (cat.label === "Lamps") { navigation.replace("AddEditLightListing", {}); return; }
+                  setCategory(cat.label);
+                }}
                 activeOpacity={0.7}
               >
                 <Ionicons name={cat.icon} size={32} color={category === cat.label ? C.primary : C.gray2} />
