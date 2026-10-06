@@ -43,6 +43,13 @@ export function isTyreVendor(specialties?: string[] | null): boolean {
   return !!specialties?.includes(TYRES_SPECIALTY);
 }
 
+// Lamp/light vendors have a dedicated listing screen instead of the general parts list.
+export const LIGHTS_SPECIALTY = "Lamps";
+
+export function isLightVendor(specialties?: string[] | null): boolean {
+  return !!specialties?.includes(LIGHTS_SPECIALTY);
+}
+
 export const CATEGORY_ICONS: Record<string, string> = {
   "Air & Fuel":           "flame-outline",
   "Axle & Brakes":        "disc-outline",

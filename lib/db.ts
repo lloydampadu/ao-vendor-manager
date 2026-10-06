@@ -139,6 +139,29 @@ export async function initDb(): Promise<void> {
       error TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS light_listings (
+      id TEXT PRIMARY KEY,
+      server_id TEXT,
+      light_type TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'N/A',
+      make TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      year TEXT NOT NULL DEFAULT '',
+      condition TEXT NOT NULL,
+      price_ghs INTEGER NOT NULL,
+      photos TEXT NOT NULL DEFAULT '[]',
+      in_stock INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS light_listing_queue (
+      id TEXT PRIMARY KEY,
+      op TEXT NOT NULL,
+      listing_id TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      synced INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -476,4 +499,96 @@ export async function markTyreListingSynced(id: string): Promise<void> {
 export async function markTyreListingError(id: string, error: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE tyre_listing_queue SET error = ? WHERE id = ?`, [error, id]);
+}
+
+// ─── Light listings cache + write queue ──────────────────────────────────────
+
+export type LightListing = {
+  id: string;
+  server_id: string | null;
+  light_type: string;
+  side: string;
+  make: string;
+  model: string;
+  year: string;
+  condition: string;
+  price_ghs: number;
+  photos: string; // JSON string[]
+  in_stock: number; // 0 or 1
+  updated_at: string;
+};
+
+export type LightListingQueueItem = {
+  id: string;
+  op: string; // "create" | "update" | "delete"
+  listing_id: string;
+  payload: string; // JSON blob
+  synced: number; // 0 or 1
+  error: string | null;
+  created_at: string;
+};
+
+export async function upsertLightListing(l: LightListing): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO light_listings (id, server_id, light_type, side, make, model, year, condition, price_ghs, photos, in_stock, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       server_id = excluded.server_id,
+       light_type = excluded.light_type,
+       side = excluded.side,
+       make = excluded.make,
+       model = excluded.model,
+       year = excluded.year,
+       condition = excluded.condition,
+       price_ghs = excluded.price_ghs,
+       photos = excluded.photos,
+       in_stock = excluded.in_stock,
+       updated_at = excluded.updated_at`,
+    [l.id, l.server_id, l.light_type, l.side, l.make, l.model, l.year, l.condition, l.price_ghs, l.photos, l.in_stock, l.updated_at],
+  );
+}
+
+export async function getLightListings(): Promise<LightListing[]> {
+  const db = await getDb();
+  return db.getAllAsync<LightListing>(`SELECT * FROM light_listings ORDER BY updated_at DESC`);
+}
+
+export async function deleteLightListing(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM light_listings WHERE id = ?`, [id]);
+}
+
+export async function deleteDuplicateLightListings(serverId: string, keepId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `DELETE FROM light_listings WHERE server_id = ? AND id != ?`,
+    [serverId, keepId],
+  );
+}
+
+export async function enqueueLightListing(q: LightListingQueueItem): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO light_listing_queue (id, op, listing_id, payload, synced, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [q.id, q.op, q.listing_id, q.payload, q.synced, q.error, q.created_at],
+  );
+}
+
+export async function getPendingLightListings(): Promise<LightListingQueueItem[]> {
+  const db = await getDb();
+  return db.getAllAsync<LightListingQueueItem>(
+    `SELECT * FROM light_listing_queue WHERE synced = 0 ORDER BY created_at ASC`,
+  );
+}
+
+export async function markLightListingSynced(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE light_listing_queue SET synced = 1, error = NULL WHERE id = ?`, [id]);
+}
+
+export async function markLightListingError(id: string, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE light_listing_queue SET error = ? WHERE id = ?`, [error, id]);
 }

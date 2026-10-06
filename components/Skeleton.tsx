@@ -193,6 +193,41 @@ export function TyreListingsSkeleton() {
   );
 }
 
+export function LightItemSkeleton() {
+  const C = useThemeColors();
+  return (
+    <View style={[styles.tyreCard, { backgroundColor: C.white }]}>
+      <SkeletonBox width="100%" height={110} borderRadius={0} />
+      <View style={styles.tyrePad}>
+        <SkeletonBox width="85%" height={13} borderRadius={4} />
+        <View style={{ height: 6 }} />
+        <SkeletonBox width="55%" height={13} borderRadius={4} />
+        <View style={{ height: 6 }} />
+        <SkeletonBox width={52} height={20} borderRadius={4} />
+      </View>
+    </View>
+  );
+}
+
+export function LightListingsSkeleton() {
+  return (
+    <View style={styles.listPad}>
+      <SkeletonBox width="35%" height={14} borderRadius={4} style={{ marginBottom: 10 }} />
+      <View style={styles.tyreRow}>
+        <LightItemSkeleton />
+        <View style={{ width: 10 }} />
+        <LightItemSkeleton />
+      </View>
+      <View style={{ height: 10 }} />
+      <View style={styles.tyreRow}>
+        <LightItemSkeleton />
+        <View style={{ width: 10 }} />
+        <LightItemSkeleton />
+      </View>
+    </View>
+  );
+}
+
 export function OrderDetailSkeleton() {
   return (
     <View style={[styles.listPad, { gap: 12 }]}>

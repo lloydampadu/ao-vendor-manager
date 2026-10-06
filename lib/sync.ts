@@ -1,4 +1,4 @@
-import { api, tyreListingsApi, tyreCatalogApi } from "./api";
+import { api, tyreListingsApi, tyreCatalogApi, lightListingsApi } from "./api";
 import {
   upsertAssignment,
   getAssignments,
@@ -21,6 +21,12 @@ import {
   deleteTyreListing,
   deleteDuplicateTyreListings,
   cacheTyreCatalog,
+  upsertLightListing,
+  getPendingLightListings,
+  markLightListingSynced,
+  markLightListingError,
+  deleteLightListing,
+  deleteDuplicateLightListings,
   type Assignment,
 } from "./db";
 import { uploadImage } from "./upload";
@@ -413,6 +419,142 @@ export async function pullTyreCatalog(): Promise<void> {
   }
 }
 
+export async function pushPendingLightListings(): Promise<void> {
+  const queue = await getPendingLightListings();
+  console.log(`[sync] pushPendingLightListings: ${queue.length} queued`, queue.map((q) => `${q.listing_id.slice(-6)} op=${q.op} err=${q.error ?? "none"}`));
+
+  for (const item of queue) {
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(item.payload) as Record<string, unknown>;
+    } catch (parseErr) {
+      console.error(`[sync] bad payload for light listing queue item ${item.id} — dropping`, parseErr);
+      await markLightListingSynced(item.id);
+      await markLightListingError(item.id, "bad payload");
+      continue;
+    }
+
+    try {
+      if (item.op === "create") {
+        const rawPhotos = Array.isArray(payload.photos) ? (payload.photos as string[]) : [];
+        const uploadedPhotos: string[] = [];
+        for (const uri of rawPhotos) {
+          if (uri.startsWith("http")) {
+            uploadedPhotos.push(uri);
+          } else {
+            console.log(`[sync] uploading local light photo for listing ${item.listing_id.slice(-6)}`);
+            const remoteUrl = await uploadImage(uri);
+            uploadedPhotos.push(remoteUrl);
+          }
+        }
+        const body = { ...payload, ...(uploadedPhotos.length ? { photos: uploadedPhotos } : {}) };
+        console.log(`[sync] creating light listing for ${item.listing_id.slice(-6)}`);
+        const { listing } = await lightListingsApi.create(body);
+        if (item.listing_id !== listing.id) {
+          await deleteLightListing(item.listing_id);
+        }
+        await upsertLightListing({
+          id: listing.id,
+          server_id: listing.id,
+          light_type: listing.lightType,
+          side: listing.side,
+          make: listing.make ?? "",
+          model: listing.model ?? "",
+          year: listing.year ?? "",
+          condition: listing.condition,
+          price_ghs: listing.priceGhs,
+          photos: JSON.stringify(listing.photos),
+          in_stock: listing.inStock ? 1 : 0,
+          updated_at: listing.updatedAt,
+        });
+        await markLightListingSynced(item.id);
+        console.log(`[sync] light listing created for ${item.listing_id.slice(-6)}, server_id=${listing.id.slice(-6)}`);
+      } else if (item.op === "update") {
+        const rawPhotos = Array.isArray(payload.photos) ? (payload.photos as string[]) : [];
+        const uploadedPhotos: string[] = [];
+        for (const uri of rawPhotos) {
+          if (uri.startsWith("http")) {
+            uploadedPhotos.push(uri);
+          } else {
+            console.log(`[sync] uploading local light photo for listing ${item.listing_id.slice(-6)}`);
+            const remoteUrl = await uploadImage(uri);
+            uploadedPhotos.push(remoteUrl);
+          }
+        }
+        const serverId = typeof payload.server_id === "string" ? payload.server_id : item.listing_id;
+        const body = { ...payload, ...(rawPhotos.length ? { photos: uploadedPhotos } : {}) };
+        console.log(`[sync] updating light listing ${serverId.slice(-6)}`);
+        await lightListingsApi.update(serverId, body);
+        await markLightListingSynced(item.id);
+        console.log(`[sync] light listing updated for ${item.listing_id.slice(-6)}`);
+      } else if (item.op === "delete") {
+        const serverId = typeof payload.server_id === "string" ? payload.server_id : null;
+        if (!serverId) {
+          console.log(`[sync] deleting local-only light listing ${item.listing_id.slice(-6)} (no server_id) — skipping API call`);
+          await deleteLightListing(item.listing_id);
+          await markLightListingSynced(item.id);
+          continue;
+        }
+        console.log(`[sync] deleting light listing ${serverId.slice(-6)}`);
+        await lightListingsApi.delete(serverId);
+        await deleteLightListing(item.listing_id);
+        await markLightListingSynced(item.id);
+        console.log(`[sync] light listing deleted for ${item.listing_id.slice(-6)}`);
+      } else {
+        console.warn(`[sync] unknown light listing op "${item.op}" for item ${item.id} — dropping`);
+        await markLightListingSynced(item.id);
+        await markLightListingError(item.id, `unknown op: ${item.op}`);
+      }
+    } catch (err) {
+      const e = err as { status?: number; message?: string };
+      console.error(`[sync] light listing push FAILED for ${item.listing_id.slice(-6)}: ${e.status} ${e.message}`);
+      if (e.status === 404 || e.status === 409) {
+        await markLightListingSynced(item.id);
+        await markLightListingError(item.id, e.status === 404 ? "not found" : "conflict");
+      } else {
+        await markLightListingError(item.id, e.message ?? "unknown error");
+      }
+    }
+  }
+}
+
+export async function pullLightListings(): Promise<void> {
+  console.log("[sync] pullLightListings: fetching /vendor/light-listings");
+  let listings: import("./api").ApiLightListing[];
+  try {
+    const res = await lightListingsApi.getAll();
+    listings = res.listings;
+  } catch (err) {
+    console.warn("[sync] pullLightListings failed:", err);
+    return;
+  }
+  console.log(`[sync] server returned ${listings.length} light listings`);
+
+  for (const l of listings) {
+    try {
+      await upsertLightListing({
+        id: l.id,
+        server_id: l.id,
+        light_type: l.lightType,
+        side: l.side,
+        make: l.make ?? "",
+        model: l.model ?? "",
+        year: l.year ?? "",
+        condition: l.condition,
+        price_ghs: l.priceGhs,
+        photos: JSON.stringify(l.photos),
+        in_stock: l.inStock ? 1 : 0,
+        updated_at: l.updatedAt,
+      });
+      await deleteDuplicateLightListings(l.id, l.id);
+    } catch (rowErr) {
+      console.error(`[sync] failed to upsert light listing ${l.id?.slice(-6)} — skipping`, rowErr);
+    }
+  }
+
+  console.log("[sync] pullLightListings done");
+}
+
 export async function sync(): Promise<void> {
   console.log("[sync] ---- sync started ---- API:", process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000");
   await pullAssignments();
@@ -423,5 +565,7 @@ export async function sync(): Promise<void> {
   await pushPendingTyreListings();
   await pullTyreListings();
   await pullTyreCatalog();
+  await pushPendingLightListings();
+  await pullLightListings();
   console.log("[sync] ---- sync complete ----");
 }

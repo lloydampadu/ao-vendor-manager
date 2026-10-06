@@ -5,8 +5,10 @@ import AddEditProductScreen from "../screens/AddEditProductScreen";
 import AddPartWizardScreen from "../screens/AddPartWizardScreen";
 import TyreListingsScreen from "../screens/TyreListingsScreen";
 import AddEditTyreListingScreen from "../screens/AddEditTyreListingScreen";
-import type { TyreListing } from "@/lib/db";
-import { isTyreVendor } from "@/lib/parts-catalog";
+import LightListingsScreen from "../screens/LightListingsScreen";
+import AddEditLightListingScreen from "../screens/AddEditLightListingScreen";
+import type { TyreListing, LightListing } from "@/lib/db";
+import { isTyreVendor, isLightVendor } from "@/lib/parts-catalog";
 import { useAuthStore } from "@/store/auth-store";
 import { useThemeColors } from "../../constants/theme";
 
@@ -16,6 +18,8 @@ export type ProductsStackParamList = {
   AddPartWizard: undefined;
   TyreListings: undefined;
   AddEditTyreListing: { listing?: TyreListing };
+  LightListings: undefined;
+  AddEditLightListing: { listing?: LightListing };
 };
 
 const Stack = createNativeStackNavigator<ProductsStackParamList>();
@@ -23,9 +27,11 @@ const Stack = createNativeStackNavigator<ProductsStackParamList>();
 export default function ProductsStackNavigator(): React.JSX.Element {
   const C = useThemeColors();
   const vendor = useAuthStore((s) => s.vendor);
-  // Tyre sellers manage tyres, not car parts — land them straight on their
-  // tyre listings so they never hit the parts screen.
-  const initialRoute = isTyreVendor(vendor?.specialties) ? "TyreListings" : "ProductsList";
+  const initialRoute = isTyreVendor(vendor?.specialties)
+    ? "TyreListings"
+    : isLightVendor(vendor?.specialties)
+    ? "LightListings"
+    : "ProductsList";
   return (
     <Stack.Navigator
       initialRouteName={initialRoute}
@@ -59,6 +65,16 @@ export default function ProductsStackNavigator(): React.JSX.Element {
         name="AddEditTyreListing"
         component={AddEditTyreListingScreen}
         options={({ route }) => ({ title: route.params?.listing ? "Edit Tyre" : "Add Tyre" })}
+      />
+      <Stack.Screen
+        name="LightListings"
+        component={LightListingsScreen}
+        options={{ title: "My Lights" }}
+      />
+      <Stack.Screen
+        name="AddEditLightListing"
+        component={AddEditLightListingScreen}
+        options={({ route }) => ({ title: route.params?.listing ? "Edit Light" : "Add Light" })}
       />
     </Stack.Navigator>
   );

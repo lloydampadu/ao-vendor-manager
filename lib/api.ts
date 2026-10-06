@@ -80,3 +80,26 @@ export type ApiTyreCatalogBrand = {
 export const tyreCatalogApi = {
   get: () => api.get<{ brands: ApiTyreCatalogBrand[] }>("/tyres/catalog"),
 };
+
+// ─── Light listings API calls ─────────────────────────────────────────────────
+
+export type ApiLightListing = {
+  id: string;
+  lightType: string;
+  side: string;
+  make: string | null;
+  model: string | null;
+  year: string | null;
+  condition: string;
+  priceGhs: number;
+  photos: string[];
+  inStock: boolean;
+  updatedAt: string;
+};
+
+export const lightListingsApi = {
+  getAll: () => api.get<{ listings: ApiLightListing[] }>("/vendor/light-listings"),
+  create: (body: unknown) => api.post<{ listing: ApiLightListing }>("/vendor/light-listings", body),
+  update: (id: string, body: unknown) => api.patch<{ listing: ApiLightListing }>(`/vendor/light-listings/${id}`, body),
+  delete: (id: string) => api.delete<void>(`/vendor/light-listings/${id}`),
+};
