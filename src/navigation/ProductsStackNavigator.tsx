@@ -7,6 +7,7 @@ import TyreListingsScreen from "../screens/TyreListingsScreen";
 import AddEditTyreListingScreen from "../screens/AddEditTyreListingScreen";
 import LightListingsScreen from "../screens/LightListingsScreen";
 import AddEditLightListingScreen from "../screens/AddEditLightListingScreen";
+import AddEditPartListingScreen from "../screens/AddEditPartListingScreen";
 import type { TyreListing, LightListing } from "@/lib/db";
 import { isTyreVendor, isLightVendor } from "@/lib/parts-catalog";
 import { useAuthStore } from "@/store/auth-store";
@@ -20,6 +21,7 @@ export type ProductsStackParamList = {
   AddEditTyreListing: { listing?: TyreListing };
   LightListings: undefined;
   AddEditLightListing: { listing?: LightListing };
+  AddEditPartListing: { category: string };
 };
 
 const Stack = createNativeStackNavigator<ProductsStackParamList>();
@@ -75,6 +77,11 @@ export default function ProductsStackNavigator(): React.JSX.Element {
         name="AddEditLightListing"
         component={AddEditLightListingScreen}
         options={({ route }) => ({ title: route.params?.listing ? "Edit Light" : "Add Light" })}
+      />
+      <Stack.Screen
+        name="AddEditPartListing"
+        component={AddEditPartListingScreen}
+        options={({ route }) => ({ title: `Add ${route.params.category} Part` })}
       />
     </Stack.Navigator>
   );
