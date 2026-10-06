@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import {
   Alert, ActivityIndicator, ScrollView, View, TextInput, StyleSheet,
   TouchableOpacity,
@@ -15,7 +15,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 const CONDITION_OPTIONS = ["Brand New", "Home Used"] as const;
 type Condition = (typeof CONDITION_OPTIONS)[number];
-const PHOTO_WINDOW_SECONDS = 90;
 const MAX_PHOTOS_PER_CONDITION = 4;
 
 export type PriceEntry = { condition: Condition; priceGhs: number };
@@ -71,10 +70,8 @@ export function QuoteForm({
 
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // Which condition are we currently shooting for (timer + camera open)
+  // Which condition has the camera open (blocks double-tap)
   const [pendingCondition, setPendingCondition] = useState<Condition | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(PHOTO_WINDOW_SECONDS);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Conditions with a filled price
   const filledConditions = CONDITION_OPTIONS.filter((c) => parseInt(prices[c], 10) > 0);
@@ -90,26 +87,8 @@ export function QuoteForm({
   const uploadingForCondition = (cond: Condition) =>
     (photosByCondition[cond] ?? []).some((p) => p.url === null);
 
-  // Start countdown when pendingCondition set
-  useEffect(() => {
-    if (!pendingCondition) return;
-    setSecondsLeft(PHOTO_WINDOW_SECONDS);
-    timerRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          clearInterval(timerRef.current!);
-          setPendingCondition(null);
-          Alert.alert("Too slow", "You didn't take a photo in time. Try again.");
-          return PHOTO_WINDOW_SECONDS;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    void openCamera(pendingCondition);
-    return () => clearInterval(timerRef.current!);
-  }, [pendingCondition]);
-
   async function openCamera(forCondition: Condition) {
+    setPendingCondition(forCondition);
     const camPerm = await ImagePicker.requestCameraPermissionsAsync();
     if (!camPerm.granted) {
       Alert.alert("Camera needed", "Please allow camera access to continue.");
@@ -123,13 +102,9 @@ export function QuoteForm({
     });
     if (result.canceled) {
       setPendingCondition(null);
-      clearInterval(timerRef.current!);
       return;
     }
 
-    // Stop timer — photo taken in time
-    clearInterval(timerRef.current!);
-    timerRef.current = null;
     setPendingCondition(null);
 
     const uri = result.assets[0].uri;
@@ -218,8 +193,6 @@ export function QuoteForm({
     }
   }
 
-  const timerColor = secondsLeft <= 15 ? "#dc2626" : secondsLeft <= 30 ? "#d97706" : C.primary;
-
   return (
     <View>
       <ReusableText text="Your price (GHS)" family="medium" size={SIZES.small} color={C.secondary} />
@@ -256,7 +229,6 @@ export function QuoteForm({
             const entries = photosByCondition[cond] ?? [];
             const hasPhotos = entries.length > 0;
             const canAddMore = entries.length < MAX_PHOTOS_PER_CONDITION;
-            const isThisPending = pendingCondition === cond;
             const isUploading = uploadingForCondition(cond);
 
             return (
@@ -278,26 +250,6 @@ export function QuoteForm({
                     color={C.gray2}
                   />
                 </View>
-
-                {/* Countdown box when shooting for this condition */}
-                {isThisPending && (
-                  <View style={[styles.countdownBox, { borderColor: C.primary, backgroundColor: C.primary1 }]}>
-                    <ReusableText text="Take the photo now!" family="bold" size={14} color={timerColor} />
-                    <HeightSpacer height={4} />
-                    <ReusableText text={`${secondsLeft}s left`} family="medium" size={24} color={timerColor} />
-                    <HeightSpacer height={8} />
-                    <TouchableOpacity
-                      style={[styles.cameraBtn, { borderColor: C.primary, backgroundColor: C.white }]}
-                      onPress={() => void openCamera(cond)}
-                      disabled={isUploading}
-                    >
-                      {isUploading
-                        ? <ActivityIndicator color={C.primary} />
-                        : <><Ionicons name="camera" size={18} color={C.primary} /><ReusableText text="  Open Camera" family="medium" size={12} color={C.primary} /></>
-                      }
-                    </TouchableOpacity>
-                  </View>
-                )}
 
                 {/* Thumbnail strip */}
                 {hasPhotos && (
@@ -323,10 +275,10 @@ export function QuoteForm({
                 )}
 
                 {/* Add photo button */}
-                {!isThisPending && canAddMore && !pendingCondition && (
+                {canAddMore && !pendingCondition && (
                   <TouchableOpacity
                     style={[styles.addPhotoBtn, { borderColor: C.primary, backgroundColor: C.primary1 }]}
-                    onPress={() => { setPendingCondition(cond); }}
+                    onPress={() => { void openCamera(cond); }}
                     disabled={isUploading}
                   >
                     <Ionicons name="camera-outline" size={18} color={C.primary} />
@@ -430,20 +382,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1.5,
     borderStyle: "dashed",
-  },
-  countdownBox: {
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
-  cameraBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 1.5,
   },
   locationRow: { flexDirection: "row", alignItems: "center" },
 });
