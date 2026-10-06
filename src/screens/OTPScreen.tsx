@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
+import { useSyncStore } from '../../store/sync-store';
 import { registerPushToken } from '@/lib/notifications';
 import { ReusableBtn, ReusableText, HeightSpacer } from '../../components';
 import { SIZES, useThemeColors } from '../../constants/theme';
@@ -19,6 +20,7 @@ export default function OTPScreen({ route, navigation }: Props): React.JSX.Eleme
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const { setAuth } = useAuthStore();
+  const { startSync } = useSyncStore();
 
   async function verify(): Promise<void> {
     if (code.length !== 6) { setError('Enter the 6-digit code'); return; }
@@ -31,6 +33,7 @@ export default function OTPScreen({ route, navigation }: Props): React.JSX.Eleme
       const needsBrands = !vendor.brands || vendor.brands.length === 0;
       const route = needsSpecialties ? 'Onboarding' : needsBrands ? 'OnboardingBrands' : 'Main';
       navigation.reset({ index: 0, routes: [{ name: route }] });
+      startSync().catch(() => {});
       registerPushToken().catch((e) => {
         // Surfaced, not swallowed: in Expo Go (SDK 53+) there is no push token,
         // so this is expected there; on a real build a failure here means the

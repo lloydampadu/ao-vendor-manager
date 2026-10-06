@@ -18,9 +18,6 @@ type Segment = (typeof SEGMENTS)[number];
 
 type SegmentState = { loading: boolean; assignments: Assignment[] };
 
-// Persists across remounts so we never show the skeleton on a return visit
-const segmentLoaded: Partial<Record<Segment, boolean>> = {};
-
 type RequestData = {
   partName: string;
   make?: string | null;
@@ -34,14 +31,15 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
   const [segment, setSegment] = useState<Segment>("PENDING");
   const [segmentStates, setSegmentStates] = useState<Record<Segment, SegmentState>>(() => ({
-    PENDING:  { loading: !segmentLoaded["PENDING"],  assignments: [] },
-    QUOTED:   { loading: !segmentLoaded["QUOTED"],   assignments: [] },
-    DECLINED: { loading: !segmentLoaded["DECLINED"], assignments: [] },
+    PENDING:  { loading: true, assignments: [] },
+    QUOTED:   { loading: true, assignments: [] },
+    DECLINED: { loading: true, assignments: [] },
   }));
   const [refreshing, setRefreshing] = useState(false);
   const { startSync } = useSyncStore();
   const isFocused = useIsFocused();
   const lastFpRef = useRef<Partial<Record<Segment, string>>>({});
+  const segmentLoadedRef = useRef<Partial<Record<Segment, boolean>>>({});
   const firstFocusRef = useRef(true);
   // Always up-to-date segment for use inside stable callbacks
   const segmentRef = useRef<Segment>("PENDING");
@@ -51,7 +49,7 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
 
   // load() takes the target segment explicitly so it's stable (no segment dep)
   const load = useCallback(async (seg: Segment, silent = false) => {
-    if (!silent && !segmentLoaded[seg]) {
+    if (!silent && !segmentLoadedRef.current[seg]) {
       setSegmentStates((prev) => ({ ...prev, [seg]: { ...prev[seg], loading: true } }));
     }
     await initDb();
@@ -63,7 +61,7 @@ export default function InboxScreen({ navigation }: Props): React.JSX.Element {
     } else {
       setSegmentStates((prev) => ({ ...prev, [seg]: { ...prev[seg], loading: false } }));
     }
-    segmentLoaded[seg] = true;
+    segmentLoadedRef.current[seg] = true;
   }, []);
 
   // Pre-load all segments in parallel on mount so tab switches are instant
