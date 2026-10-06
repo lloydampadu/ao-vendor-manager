@@ -13,13 +13,25 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0060C0"
-      }
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "versionCode": 2
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.abosseyokaidirect.vendormanager",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Take photos of the parts you are quoting or listing so customers can see exactly what they will get.",
+        "NSLocationWhenInUseUsageDescription": "Attach your shop location to a quote so AbosseyOkai can arrange pickup.",
+        "NSPhotoLibraryUsageDescription": "Choose a profile photo for your vendor account."
       }
     },
     "plugins": [
@@ -42,12 +54,30 @@
           "resizeMode": "contain",
           "backgroundColor": "#0060C0"
         }
-      ]
+      ],
+      "@sentry/react-native",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "abosseyokai",
+          "project": "ao-vendor-manager",
+          "url": "https://sentry.io/"
+        }
+      ],
+      "expo-updates"
     ],
     "extra": {
       "eas": {
         "projectId": "64fab91e-1093-4f3d-a321-da6c44de5d0d"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/64fab91e-1093-4f3d-a321-da6c44de5d0d",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
     }
   }
 }

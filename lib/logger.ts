@@ -2,6 +2,8 @@
 // payload dumps to vendors' devices; warn/error always go through so crash
 // reporters and `adb logcat` still see real failures.
 
+import * as Sentry from "@sentry/react-native";
+
 declare const __DEV__: boolean;
 
 const isDev = typeof __DEV__ !== "undefined" && __DEV__;
@@ -26,6 +28,8 @@ export function createLogger(scope: string) {
     },
     error(msg: string, err?: unknown, fields?: Fields): void {
       console.error(format(scope, msg, fields), err instanceof Error ? err.message : err ?? "");
+      // Errors (not warnings) also go to crash reporting when it is configured.
+      Sentry.captureException(err instanceof Error ? err : new Error(`${scope}: ${msg}`), { tags: { scope }, extra: fields });
     },
   };
 }

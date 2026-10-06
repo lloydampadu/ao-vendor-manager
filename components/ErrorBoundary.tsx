@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import ReusableText from "./Reusable/ReusableText";
 import { LIGHT_COLORS } from "../constants/theme";
+import * as Sentry from "@sentry/react-native";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("error-boundary");
@@ -22,6 +23,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     log.error("uncaught render error", error, { componentStack: info.componentStack?.slice(0, 500) });
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   private reset = () => this.setState({ error: null });

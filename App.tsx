@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import * as Sentry from "@sentry/react-native";
 import { useAuthStore } from "@/store/auth-store";
 import { startSyncLoop } from "@/store/sync-store";
 import { registerPushToken, resetPushRegistration, setupNotificationListeners, type NotificationTarget } from "@/lib/notifications";
@@ -14,6 +15,16 @@ import { ErrorBoundary, OfflineBanner } from "./components";
 import { DARK_COLORS, LIGHT_COLORS } from "./constants/theme";
 
 const log = createLogger("app");
+
+// Crash reporting. No-op until EXPO_PUBLIC_SENTRY_DSN is set (eas.json env or .env).
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+Sentry.init({
+  dsn: SENTRY_DSN,
+  enabled: !!SENTRY_DSN && !__DEV__,
+  environment: __DEV__ ? "development" : "production",
+  tracesSampleRate: 0,
+  sendDefaultPii: false,
+});
 
 // Keep the native splash up until fonts and the auth session are ready, so the
 // vendor never sees a blank spinner between splash and first screen.
@@ -28,7 +39,7 @@ function navTheme(dark: boolean): Theme {
   };
 }
 
-export default function App(): React.JSX.Element {
+function App(): React.JSX.Element {
   const status = useAuthStore((s) => s.status);
   const hydrate = useAuthStore((s) => s.hydrate);
   const scheme = useColorScheme();
@@ -59,6 +70,7 @@ export default function App(): React.JSX.Element {
       resetPushRegistration();
       return;
     }
+    Sentry.setUser({ id: useAuthStore.getState().vendor?.id });
     const stop = startSyncLoop();
     registerPushToken().catch((err) => log.warn("registerPushToken failed", err));
     return stop;
@@ -103,3 +115,5 @@ export default function App(): React.JSX.Element {
     </SafeAreaProvider>
   );
 }
+
+export default Sentry.wrap(App);
