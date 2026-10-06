@@ -137,7 +137,7 @@ export function QuoteForm({
         ...prev,
         [forCondition]: (prev[forCondition] ?? []).filter((e) => !(e.localUri === uri && e.url === null)),
       }));
-      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload photo");
+      Alert.alert("Photo not uploaded", "The photo didn't go through. Check your connection and try again.");
     }
   }
 

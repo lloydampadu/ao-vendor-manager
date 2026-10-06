@@ -96,7 +96,7 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
       setPhotos((prev) => [...prev, url]);
     } catch (e) {
       setLocalUris((prev) => prev.filter((u) => u !== localUri));
-      Alert.alert("Upload failed", e instanceof Error ? e.message : "Could not upload the photo. Try again.");
+      Alert.alert("Photo not uploaded", "The photo didn't go through. Check your connection and try again.");
     } finally {
       setUploading(false);
     }
@@ -166,7 +166,7 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
 
       nav.goBack();
     } catch (e: unknown) {
-      Alert.alert("Something went wrong", e instanceof Error ? e.message : "Could not save. Try again.");
+      Alert.alert("Couldn't save", "Something went wrong on our end. Please try again.");
     } finally {
       setSaving(false);
     }

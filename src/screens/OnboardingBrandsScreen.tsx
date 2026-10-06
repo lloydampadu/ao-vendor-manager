@@ -71,7 +71,7 @@ export default function OnboardingBrandsScreen({ navigation }: Props): React.JSX
       if (vendor) setVendor({ ...vendor, brands: saved });
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Could not save");
+      Alert.alert("Couldn't save", "Something went wrong. Please try again.");
     } finally {
       setSaving(false);
     }

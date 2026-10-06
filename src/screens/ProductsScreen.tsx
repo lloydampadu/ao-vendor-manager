@@ -61,7 +61,7 @@ export default function ProductsScreen(): React.JSX.Element {
       await cacheProducts(p);
     } catch (e) {
       if (!firstLoadDone.current)
-        Alert.alert("Error", e instanceof Error ? e.message : "Could not load products");
+        Alert.alert("Couldn't load products", "Check your connection and pull down to refresh.");
     } finally {
       firstLoadDone.current = true;
       setLoading(false);
@@ -73,7 +73,7 @@ export default function ProductsScreen(): React.JSX.Element {
       await api.patch(`/vendor/products/${product.id}`, { inStock: !product.inStock });
       setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, inStock: !p.inStock } : p)));
     } catch {
-      Alert.alert("Error", "Could not update stock status");
+      Alert.alert("Couldn't update stock", "Please check your connection and try again.");
     }
   }
 
@@ -88,7 +88,7 @@ export default function ProductsScreen(): React.JSX.Element {
             await api.delete(`/vendor/products/${product.id}`);
             setProducts((prev) => prev.filter((p) => p.id !== product.id));
           } catch {
-            Alert.alert("Error", "Could not delete product");
+            Alert.alert("Couldn't delete", "Something went wrong. Please try again.");
           }
         },
       },

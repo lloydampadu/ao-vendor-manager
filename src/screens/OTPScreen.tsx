@@ -38,7 +38,7 @@ export default function OTPScreen({ route, navigation }: Props): React.JSX.Eleme
         console.warn('[notifications] registerPushToken failed:', e);
       });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      setError('Wrong code or it has expired. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -159,7 +159,7 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
       setEditingQuote(false);
       Alert.alert("Quote updated", "Your changes have been saved.");
     } catch (e) {
-      Alert.alert("Something went wrong", e instanceof Error ? e.message : "Could not update your quote. Try again.");
+      Alert.alert("Couldn't update quote", "Please check your connection and try again.");
     }
   }
 

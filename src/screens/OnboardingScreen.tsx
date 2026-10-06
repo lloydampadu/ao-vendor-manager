@@ -125,7 +125,7 @@ export default function OnboardingScreen({ navigation }: Props): React.JSX.Eleme
       if (vendor) setVendor({ ...vendor, specialties: saved, categories });
       navigation.navigate("OnboardingBrands");
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Could not save");
+      Alert.alert("Couldn't save", "Something went wrong. Please try again.");
     } finally {
       setSaving(false);
     }

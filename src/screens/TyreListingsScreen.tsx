@@ -79,7 +79,7 @@ export default function TyreListingsScreen(): React.JSX.Element {
       setListings(rows);
     } catch (e) {
       if (!firstLoadDone.current)
-        Alert.alert("Error", e instanceof Error ? e.message : "Could not load tyre listings");
+        Alert.alert("Couldn't load tyres", "Check your connection and pull down to refresh.");
     } finally {
       firstLoadDone.current = true;
       setLoading(false);

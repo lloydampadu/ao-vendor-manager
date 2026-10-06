@@ -133,7 +133,7 @@ export default function AddPartWizardScreen({ navigation }: Props): React.JSX.El
       });
       setStep("success");
     } catch (e) {
-      Alert.alert("Something went wrong", e instanceof Error ? e.message : "Could not save. Try again.");
+      Alert.alert("Couldn't save", "Something went wrong on our end. Please try again.");
     } finally {
       setSaving(false);
     }

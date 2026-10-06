@@ -26,7 +26,7 @@ export default function LoginScreen({ navigation }: Props): React.JSX.Element {
       await api.post('/vendor-auth/otp/send', { phone });
       navigation.navigate('OTP', { phone });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Could not send code');
+      setError('Could not send the code. Check your number and try again.');
     } finally {
       setLoading(false);
     }
