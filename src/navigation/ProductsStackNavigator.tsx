@@ -1,7 +1,6 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import ProductsScreen, { type Product } from "../screens/ProductsScreen";
-import AddEditProductScreen from "../screens/AddEditProductScreen";
+import PartListingsScreen from "../screens/PartListingsScreen";
 import AddPartWizardScreen from "../screens/AddPartWizardScreen";
 import TyreListingsScreen from "../screens/TyreListingsScreen";
 import AddEditTyreListingScreen from "../screens/AddEditTyreListingScreen";
@@ -14,8 +13,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useThemeColors } from "../../constants/theme";
 
 export type ProductsStackParamList = {
-  ProductsList: undefined;
-  AddEditProduct: { product?: Product };
+  PartListings: undefined;
   AddPartWizard: undefined;
   TyreListings: undefined;
   AddEditTyreListing: { listing?: TyreListing };
@@ -33,7 +31,7 @@ export default function ProductsStackNavigator(): React.JSX.Element {
     ? "TyreListings"
     : isLightVendor(vendor?.specialties, vendor?.categories)
     ? "LightListings"
-    : "ProductsList";
+    : "PartListings";
   return (
     <Stack.Navigator
       initialRouteName={initialRoute}
@@ -44,19 +42,14 @@ export default function ProductsStackNavigator(): React.JSX.Element {
       }}
     >
       <Stack.Screen
-        name="ProductsList"
-        component={ProductsScreen}
+        name="PartListings"
+        component={PartListingsScreen}
         options={{ title: "My Parts" }}
       />
       <Stack.Screen
         name="AddPartWizard"
         component={AddPartWizardScreen}
         options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="AddEditProduct"
-        component={AddEditProductScreen}
-        options={({ route }) => ({ title: route.params?.product ? "Edit Part" : "Add Part" })}
       />
       <Stack.Screen
         name="TyreListings"

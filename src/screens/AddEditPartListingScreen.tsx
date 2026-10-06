@@ -232,6 +232,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         condition,
         photos: photos.filter(Boolean),
         inStock,
+        category,
         ...(engineCapacity ? { engineCapacity } : {}),
       });
       nav.goBack();
