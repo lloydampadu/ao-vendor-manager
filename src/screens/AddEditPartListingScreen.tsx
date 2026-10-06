@@ -43,72 +43,21 @@ const YEARS = Array.from({ length: CURRENT_YEAR - 1980 + 1 }, (_, i) => String(C
 
 type CategoryConfig = {
   allTypes: string[];
-  primaryTypes: string[];
   hasSide: boolean;
   hasPosition: boolean;
 };
 
 const CATEGORY_CONFIG: Record<string, CategoryConfig> = {
-  "Body": {
-    allTypes: PART_CATEGORIES["Body"] ?? [],
-    primaryTypes: ["Hood", "Fender", "Bumper Cover (Front)", "Bumper Cover (Rear)", "Grille", "Door Shell Front", "Door Shell Rear", "Quarter Panel", "Tailgate Shell", "Trunk Lid/Hatch"],
-    hasSide: true,
-    hasPosition: true,
-  },
-  "Axle & Brakes": {
-    allTypes: PART_CATEGORIES["Axle & Brakes"] ?? [],
-    primaryTypes: ["Caliper", "Brake Rotor/Drum, Front", "Brake Rotor/Drum, Rear", "CV Axle", "Brake Shoes/Pads", "Master Cylinder", "Hub", "Wheel Bearing", "Axle Shaft"],
-    hasSide: true,
-    hasPosition: true,
-  },
-  "Glass": {
-    allTypes: PART_CATEGORIES["Glass"] ?? [],
-    primaryTypes: ["Windshield", "Front Door Glass", "Rear Door Glass", "Back Glass", "Quarter Window", "Sun Roof / T-Top", "Front Door Vent Glass"],
-    hasSide: true,
-    hasPosition: false,
-  },
-  "Steering & Suspension": {
-    allTypes: PART_CATEGORIES["Steering & Suspension"] ?? [],
-    primaryTypes: ["Shock Absorber", "Strut", "Control Arm, Front Lower", "Control Arm, Front Upper", "Power Steering Pump", "Steering Rack/Box/Gear", "Tie Rod", "Coil/Air Spring", "Sway Bar Link"],
-    hasSide: true,
-    hasPosition: true,
-  },
-  "Electrical": {
-    allTypes: PART_CATEGORIES["Electrical"] ?? [],
-    primaryTypes: ["Alternator", "Starter", "Engine Computer", "Ignition Switch", "Engine Wiring Harness", "Ignition Coil", "Horn", "Instrument Cluster (see also Speedo)", "Speedometer Cable"],
-    hasSide: false,
-    hasPosition: false,
-  },
-  "Engine": {
-    allTypes: PART_CATEGORIES["Engine"] ?? [],
-    primaryTypes: ["Engine", "Cylinder Head (Engine)", "Water Pump", "Timing Belt/Chain", "Valve Cover", "Oil Pan, Engine", "Exhaust Manifold", "Turbocharger/Supercharger", "Engine Mounts", "Starter"],
-    hasSide: false,
-    hasPosition: false,
-  },
-  "Transmission": {
-    allTypes: PART_CATEGORIES["Transmission"] ?? [],
-    primaryTypes: ["Transmission", "Transfer Case", "Torque Convertor", "Clutch Disc", "Pressure Plate", "Transmission Mount", "Bell Housing", "Slave Cylinder"],
-    hasSide: false,
-    hasPosition: false,
-  },
-  "Interior": {
-    allTypes: PART_CATEGORIES["Interior"] ?? [],
-    primaryTypes: ["Seat, Front", "Seat, Rear (2nd Row)", "Carpet", "Dash Pad", "Headliner", "Console, Front", "Floor Mats", "Glove Box", "Mirror, Rear View"],
-    hasSide: false,
-    hasPosition: false,
-  },
-  "Heating & Cooling": {
-    allTypes: PART_CATEGORIES["Heating & Cooling"] ?? [],
-    primaryTypes: ["Radiator", "Heater Core", "Blower Motor", "Condenser", "Thermostat Housing", "Radiator Fan Shroud", "Heater Assy", "Blower Motor Resistor"],
-    hasSide: false,
-    hasPosition: false,
-  },
-  "Air & Fuel": {
-    allTypes: PART_CATEGORIES["Air & Fuel"] ?? [],
-    primaryTypes: ["Fuel Pump", "Fuel Tank", "Fuel Injector (& Misc. Injection)", "Throttle Body/Throttle Valve Housing", "Intake Manifold", "A/C Compressor", "Carburetor (see also Throttle Body)", "Intercooler", "Fuel Line"],
-    hasSide: false,
-    hasPosition: false,
-  },
+  "Body":                  { allTypes: PART_CATEGORIES["Body"] ?? [],                  hasSide: true,  hasPosition: true  },
+  "Axle & Brakes":         { allTypes: PART_CATEGORIES["Axle & Brakes"] ?? [],         hasSide: true,  hasPosition: true  },
+  "Glass":                 { allTypes: PART_CATEGORIES["Glass"] ?? [],                 hasSide: true,  hasPosition: false },
+  "Steering & Suspension": { allTypes: PART_CATEGORIES["Steering & Suspension"] ?? [], hasSide: true,  hasPosition: true  },
+  "Electrical":            { allTypes: PART_CATEGORIES["Electrical"] ?? [],            hasSide: false, hasPosition: false },
+  "Engine":                { allTypes: PART_CATEGORIES["Engine"] ?? [],                hasSide: false, hasPosition: false },
+  "Transmission":          { allTypes: PART_CATEGORIES["Transmission"] ?? [],          hasSide: false, hasPosition: false },
+  "Interior":              { allTypes: PART_CATEGORIES["Interior"] ?? [],              hasSide: false, hasPosition: false },
+  "Heating & Cooling":     { allTypes: PART_CATEGORIES["Heating & Cooling"] ?? [],     hasSide: false, hasPosition: false },
+  "Air & Fuel":            { allTypes: PART_CATEGORIES["Air & Fuel"] ?? [],            hasSide: false, hasPosition: false },
 };
 
 export default function AddEditPartListingScreen(): React.JSX.Element {
@@ -117,21 +66,15 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const route = useRoute<RouteProps>();
   const category = route.params.category;
   const vendor = useAuthStore((s) => s.vendor);
-  const baseConfig: CategoryConfig = CATEGORY_CONFIG[category] ?? {
+  const config: CategoryConfig = CATEGORY_CONFIG[category] ?? {
     allTypes: [],
-    primaryTypes: [],
     hasSide: false,
     hasPosition: false,
   };
 
-  // If the vendor has specialties that belong to this category, show those as
-  // the primary chips instead of the hardcoded defaults.
-  const categorySet = new Set(baseConfig.allTypes);
+  // Chips = vendor's own specialties that belong to this category (set by admin).
+  const categorySet = new Set(config.allTypes);
   const specialtyChips = (vendor?.specialties ?? []).filter((s) => categorySet.has(s));
-  const config: CategoryConfig = {
-    ...baseConfig,
-    primaryTypes: specialtyChips,
-  };
 
   const [partType, setPartType] = useState("");
   const [side, setSide] = useState<Side>("N/A");
@@ -174,7 +117,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
       .finally(() => setModelsLoading(false));
   }, [make]);
 
-  const isCustomType = partType !== "" && !config.primaryTypes.includes(partType);
+  const isCustomType = partType !== "" && !specialtyChips.includes(partType);
   const filteredFullList = fullListSearch.trim()
     ? config.allTypes.filter((t) => t.toLowerCase().includes(fullListSearch.toLowerCase()))
     : config.allTypes;
@@ -242,7 +185,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         {/* Part type chips */}
         <Field label="Part Type *" C={C}>
           <View style={styles.chipGrid}>
-            {config.primaryTypes.map((t) => (
+            {specialtyChips.map((t) => (
               <TouchableOpacity
                 key={t}
                 style={[
