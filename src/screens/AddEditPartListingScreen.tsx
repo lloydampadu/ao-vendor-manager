@@ -130,7 +130,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const specialtyChips = (vendor?.specialties ?? []).filter((s) => categorySet.has(s));
   const config: CategoryConfig = {
     ...baseConfig,
-    primaryTypes: specialtyChips.length > 0 ? specialtyChips : baseConfig.primaryTypes,
+    primaryTypes: specialtyChips,
   };
 
   const [partType, setPartType] = useState("");
