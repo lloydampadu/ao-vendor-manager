@@ -41,6 +41,12 @@ const CONDITION_LABEL: Record<Condition, string> = {
 const CURRENT_YEAR = 2026;
 const YEARS = Array.from({ length: CURRENT_YEAR - 1980 + 1 }, (_, i) => String(CURRENT_YEAR - i));
 
+const ENGINE_CAPACITIES = [
+  "0.8L", "1.0L", "1.2L", "1.3L", "1.4L", "1.5L", "1.6L", "1.8L",
+  "2.0L", "2.2L", "2.4L", "2.5L", "2.7L", "3.0L", "3.2L", "3.5L",
+  "4.0L", "4.5L", "5.0L", "5.5L", "6.0L+",
+];
+
 type CategoryConfig = {
   allTypes: string[];
   hasSide: boolean;
@@ -101,6 +107,11 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
 
+  const [engineCapacity, setEngineCapacity] = useState("");
+  const [variants, setVariants] = useState<string[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [showCapacityPicker, setShowCapacityPicker] = useState(false);
+
   useEffect(() => {
     const vendorBrands = vendor?.brands ?? [];
     setMakesLoading(true);
@@ -125,6 +136,15 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
       .catch(() => setModels([]))
       .finally(() => setModelsLoading(false));
   }, [make]);
+
+  useEffect(() => {
+    if (category !== "Engine" || !make || !model || !year) { setVariants([]); setEngineCapacity(""); return; }
+    setVariantsLoading(true);
+    vehicleApi.getVariants(make, model, year)
+      .then((res) => setVariants(res.variants))
+      .catch(() => setVariants([]))
+      .finally(() => setVariantsLoading(false));
+  }, [category, make, model, year]);
 
   const isCustomType = partType !== "" && !specialtyChips.includes(partType);
   const filteredFullList = fullListSearch.trim()
@@ -201,6 +221,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
       const fitment = [make, model, year].filter(Boolean).join(" ");
       parts.push(fitment);
     }
+    if (engineCapacity) parts.push(engineCapacity);
     const name = parts.join(" — ");
 
     setSaving(true);
@@ -211,6 +232,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         condition,
         photos: photos.filter(Boolean),
         inStock,
+        ...(engineCapacity ? { engineCapacity } : {}),
       });
       nav.goBack();
     } catch {
@@ -389,6 +411,27 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
           </View>
         </View>
 
+        {/* Engine capacity — only for Engine category, loaded from vehicle variants */}
+        {category === "Engine" && make && model && year && (
+          <Field label="Engine Capacity (optional)" C={C}>
+            <TouchableOpacity
+              style={[styles.select, { backgroundColor: C.white, borderColor: C.gray }]}
+              onPress={() => { if (variants.length > 0) setShowCapacityPicker(true); }}
+            >
+              <ReusableText
+                text={engineCapacity || (variantsLoading ? "Loading…" : variants.length === 0 ? "No variants found" : "Select engine")}
+                family="regular"
+                size={SIZES.medium}
+                color={engineCapacity ? C.secondary : C.gray2}
+              />
+              {variantsLoading
+                ? <ActivityIndicator size="small" color={C.gray2} />
+                : <Ionicons name="chevron-down" size={16} color={C.gray2} />
+              }
+            </TouchableOpacity>
+          </Field>
+        )}
+
         {/* Condition */}
         <Field label="Condition" C={C}>
           <View style={styles.conditionRow}>
@@ -490,7 +533,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         title="Select Make"
         items={makes}
         selected={make}
-        onSelect={(v) => { setMake(v); setModel(""); setYear(""); setShowMakePicker(false); }}
+        onSelect={(v) => { setMake(v); setModel(""); setYear(""); setEngineCapacity(""); setShowMakePicker(false); }}
         onClose={() => setShowMakePicker(false)}
         C={C}
       />
@@ -501,7 +544,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         title="Select Model"
         items={models}
         selected={model}
-        onSelect={(v) => { setModel(v); setShowModelPicker(false); }}
+        onSelect={(v) => { setModel(v); setEngineCapacity(""); setShowModelPicker(false); }}
         onClose={() => setShowModelPicker(false)}
         C={C}
       />
@@ -512,8 +555,19 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         title="Select Year"
         items={YEARS}
         selected={year}
-        onSelect={(v) => { setYear(v); setShowYearPicker(false); }}
+        onSelect={(v) => { setYear(v); setEngineCapacity(""); setShowYearPicker(false); }}
         onClose={() => setShowYearPicker(false)}
+        C={C}
+      />
+
+      {/* Engine capacity picker — variants from taxonomy */}
+      <PickerModal
+        visible={showCapacityPicker}
+        title="Select Engine"
+        items={variants}
+        selected={engineCapacity}
+        onSelect={(v) => { setEngineCapacity(v); setShowCapacityPicker(false); }}
+        onClose={() => setShowCapacityPicker(false)}
         C={C}
       />
 

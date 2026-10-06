@@ -102,6 +102,10 @@ export type ApiLightListing = {
 export const vehicleApi = {
   getMakes: () => api.get<{ makes: string[] }>("/vehicles/makes"),
   getModels: (make: string) => api.get<{ models: string[] }>(`/vehicles/models?make=${encodeURIComponent(make)}`),
+  getVariants: (make: string, model: string, year: string) =>
+    api.get<{ variants: string[] }>(
+      `/vehicles/variants?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}`
+    ),
 };
 
 // ─── Light listings API calls ─────────────────────────────────────────────────
