@@ -84,10 +84,9 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
       Alert.alert("You can only add 4 photos");
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert("Camera needed", "Please allow camera access to add tyre photos."); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     if (result.canceled || !result.assets[0]) return;
     const localUri = result.assets[0].uri;
     setLocalUris((prev) => [...prev, localUri]);
