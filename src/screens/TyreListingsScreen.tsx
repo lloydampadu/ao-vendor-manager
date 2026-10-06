@@ -19,7 +19,7 @@ import {
 } from "@/lib/db";
 import type { TyreListing } from "@/lib/db";
 import { useSyncStore } from "@/store/sync-store";
-import { ReusableText, HeightSpacer } from "../../components";
+import { ReusableText, HeightSpacer, TyreListingsSkeleton } from "../../components";
 import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
@@ -218,8 +218,8 @@ export default function TyreListingsScreen(): React.JSX.Element {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: C.offwhite, justifyContent: "center", alignItems: "center" }]}>
-        <Ionicons name="hourglass-outline" size={32} color={C.gray2} />
+      <View style={[styles.container, { backgroundColor: C.offwhite }]}>
+        <TyreListingsSkeleton />
       </View>
     );
   }

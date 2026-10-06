@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getOrder, applyLocalStage, enqueueStage, type Order } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { ReusableText, HeightSpacer, NetworkImage } from "../../components";
+import { ReusableText, HeightSpacer, NetworkImage, OrderDetailSkeleton } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { OrdersStackParamList } from "../navigation/OrdersStackNavigator";
 
@@ -71,7 +71,7 @@ export default function OrderDetailScreen({ route }: Props): React.JSX.Element {
     }
   }, [queueStage]);
 
-  if (!order) return <View style={{ flex: 1, backgroundColor: C.offwhite }} />;
+  if (!order) return <ScrollView style={{ flex: 1, backgroundColor: C.offwhite }}><OrderDetailSkeleton /></ScrollView>;
 
   const req = JSON.parse(order.request_data) as { partName: string; make?: string; model?: string; year?: number; customerName?: string };
   const items = JSON.parse(order.won_items) as WonItem[];

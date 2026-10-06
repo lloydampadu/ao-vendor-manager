@@ -132,6 +132,101 @@ export function RequestDetailSkeleton() {
   );
 }
 
+export function QuoteItemSkeleton() {
+  return (
+    <SkeletonCard>
+      <View style={styles.row}>
+        <SkeletonBox width="55%" height={15} borderRadius={5} />
+        <SkeletonBox width={64} height={22} borderRadius={10} />
+      </View>
+      <View style={{ height: 8 }} />
+      <SkeletonBox width="40%" height={12} borderRadius={4} />
+    </SkeletonCard>
+  );
+}
+
+export function QuotesSkeletonList() {
+  return (
+    <View style={styles.listPad}>
+      {[0, 1, 2, 3].map((i) => (
+        <React.Fragment key={i}>
+          <QuoteItemSkeleton />
+          <View style={{ height: 10 }} />
+        </React.Fragment>
+      ))}
+    </View>
+  );
+}
+
+export function TyreItemSkeleton() {
+  const C = useThemeColors();
+  return (
+    <View style={[styles.tyreCard, { backgroundColor: C.white }]}>
+      <SkeletonBox width="100%" height={110} borderRadius={0} />
+      <View style={styles.tyrePad}>
+        <SkeletonBox width="80%" height={13} borderRadius={4} />
+        <View style={{ height: 6 }} />
+        <SkeletonBox width="50%" height={13} borderRadius={4} />
+        <View style={{ height: 6 }} />
+        <SkeletonBox width={52} height={20} borderRadius={4} />
+      </View>
+    </View>
+  );
+}
+
+export function TyreListingsSkeleton() {
+  return (
+    <View style={styles.listPad}>
+      <SkeletonBox width="35%" height={14} borderRadius={4} style={{ marginBottom: 10 }} />
+      <View style={styles.tyreRow}>
+        <TyreItemSkeleton />
+        <View style={{ width: 10 }} />
+        <TyreItemSkeleton />
+      </View>
+      <View style={{ height: 10 }} />
+      <View style={styles.tyreRow}>
+        <TyreItemSkeleton />
+        <View style={{ width: 10 }} />
+        <TyreItemSkeleton />
+      </View>
+    </View>
+  );
+}
+
+export function OrderDetailSkeleton() {
+  return (
+    <View style={[styles.listPad, { gap: 12 }]}>
+      <SkeletonBox width="60%" height={22} borderRadius={6} />
+      <View style={{ height: 4 }} />
+      <SkeletonBox width="40%" height={14} borderRadius={4} />
+      <View style={{ height: 8 }} />
+      <SkeletonBox width={160} height={28} borderRadius={999} />
+      <View style={{ height: 16 }} />
+      <SkeletonBox width="85%" height={13} borderRadius={4} />
+      <View style={{ height: 6 }} />
+      <SkeletonBox width="70%" height={13} borderRadius={4} />
+      <View style={{ height: 20 }} />
+      <SkeletonBox width="40%" height={16} borderRadius={5} />
+      <SkeletonCard>
+        <View style={styles.row}>
+          <SkeletonBox width="55%" height={14} borderRadius={4} />
+          <SkeletonBox width={60} height={14} borderRadius={4} />
+        </View>
+        <View style={{ height: 8 }} />
+        <SkeletonBox width="70%" height={12} borderRadius={4} />
+      </SkeletonCard>
+      <SkeletonCard>
+        <View style={styles.row}>
+          <SkeletonBox width="55%" height={14} borderRadius={4} />
+          <SkeletonBox width={60} height={14} borderRadius={4} />
+        </View>
+        <View style={{ height: 8 }} />
+        <SkeletonBox width="70%" height={12} borderRadius={4} />
+      </SkeletonCard>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: 10,
@@ -143,4 +238,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   photoRow: { flexDirection: "row" },
   listPad: { padding: 12 },
+  tyreCard: { flex: 1, borderRadius: 10, overflow: "hidden", ...SHADOWS.small },
+  tyrePad: { padding: 8 },
+  tyreRow: { flexDirection: "row" },
 });

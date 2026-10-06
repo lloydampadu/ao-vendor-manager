@@ -6,7 +6,7 @@ import type { CompositeNavigationProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getAssignments, getAllQuoteQueueStatusMap, type Assignment, type QuoteSyncStatus } from "../../lib/db";
 import { useSyncStore } from "../../store/sync-store";
-import { StatusBadge, Card, ReusableText, HeightSpacer, WidthSpacer, SyncStatusIcon } from "../../components";
+import { StatusBadge, Card, ReusableText, HeightSpacer, WidthSpacer, SyncStatusIcon, QuotesSkeletonList } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { TabParamList } from "../navigation/TabNavigator";
 import type { InboxStackParamList } from "../navigation/InboxStackNavigator";
@@ -26,6 +26,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
   const [rows, setRows] = useState<Assignment[]>([]);
   const [syncStatusMap, setSyncStatusMap] = useState<Record<string, QuoteSyncStatus>>({});
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { startSync } = useSyncStore();
 
@@ -33,6 +34,7 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
     const [all, statusMap] = await Promise.all([getAssignments(), getAllQuoteQueueStatusMap()]);
     setRows(all.filter((a) => a.quote_data !== null));
     setSyncStatusMap(statusMap);
+    setLoading(false);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -46,6 +48,14 @@ export default function QuotesScreen({ navigation }: Props): React.JSX.Element {
       setRefreshing(false);
     }
   }, [startSync, load]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.offwhite }} edges={['top']}>
+        <QuotesSkeletonList />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.offwhite }} edges={['top']}>
