@@ -50,6 +50,7 @@ export function isTyreVendor(specialties?: string[] | null): boolean {
 const LAMPS_PARTS = new Set(PART_CATEGORIES["Lamps"] ?? []);
 
 export function isLightVendor(specialties?: string[] | null, categories?: string[] | null): boolean {
+  if (specialties?.includes("Lamps")) return true;
   if (categories && categories.length > 0 && categories.every((c) => c === "Lamps")) return true;
   if (!specialties || specialties.length === 0) return false;
   return specialties.every((s) => LAMPS_PARTS.has(s));
