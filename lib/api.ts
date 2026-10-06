@@ -106,6 +106,14 @@ export const vehicleApi = {
 
 // ─── Light listings API calls ─────────────────────────────────────────────────
 
+export const specialtyRequestsApi = {
+  submit: (specialties: string[], category?: string) =>
+    api.post<{ requests: { id: string; specialty: string; status: string }[] }>(
+      "/vendor/specialty-requests",
+      { specialties, category }
+    ),
+};
+
 export const lightListingsApi = {
   getAll: () => api.get<{ listings: ApiLightListing[] }>("/vendor/light-listings"),
   create: (body: unknown) => api.post<{ listing: ApiLightListing }>("/vendor/light-listings", body),

@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { uploadImage } from "@/lib/upload";
 import { PART_CATEGORIES } from "@/lib/parts-catalog";
-import { vehicleApi, api } from "@/lib/api";
+import { vehicleApi, api, specialtyRequestsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { ReusableBtn, ReusableText, HeightSpacer } from "../../components";
 import { SIZES, useThemeColors, LIGHT_COLORS } from "../../constants/theme";
@@ -66,6 +66,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const route = useRoute<RouteProps>();
   const category = route.params.category;
   const vendor = useAuthStore((s) => s.vendor);
+  const setVendor = useAuthStore((s) => s.setVendor);
   const config: CategoryConfig = CATEGORY_CONFIG[category] ?? {
     allTypes: [],
     hasSide: false,
@@ -121,6 +122,40 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const filteredFullList = fullListSearch.trim()
     ? config.allTypes.filter((t) => t.toLowerCase().includes(fullListSearch.toLowerCase()))
     : config.allTypes;
+
+  const pendingChips = (vendor?.pendingSpecialties ?? []).filter((s) => categorySet.has(s));
+
+  // Request-more modal state
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestSearch, setRequestSearch] = useState("");
+  const [requestSelected, setRequestSelected] = useState<Set<string>>(new Set());
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+
+  const alreadyHave = new Set([...specialtyChips, ...pendingChips]);
+  const requestableTypes = config.allTypes.filter((t) => !alreadyHave.has(t));
+  const filteredRequestList = requestSearch.trim()
+    ? requestableTypes.filter((t) => t.toLowerCase().includes(requestSearch.toLowerCase()))
+    : requestableTypes;
+
+  async function submitSpecialtyRequest(): Promise<void> {
+    if (requestSelected.size === 0) return;
+    setSubmittingRequest(true);
+    try {
+      await specialtyRequestsApi.submit(Array.from(requestSelected), category);
+      // Optimistically add to pendingSpecialties so chips appear immediately
+      if (vendor) {
+        const newPending = [...(vendor.pendingSpecialties ?? []), ...Array.from(requestSelected)];
+        setVendor({ ...vendor, pendingSpecialties: newPending });
+      }
+      setRequestSelected(new Set());
+      setShowRequestModal(false);
+      Alert.alert("Sent to admin", "Your request has been sent. The parts will appear here once approved.");
+    } catch {
+      Alert.alert("Couldn't send", "Check your connection and try again.");
+    } finally {
+      setSubmittingRequest(false);
+    }
+  }
 
   async function pickPhoto(): Promise<void> {
     if (photos.length >= 4) { Alert.alert("You can only add 4 photos"); return; }
@@ -185,6 +220,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         {/* Part type chips */}
         <Field label="Part Type *" C={C}>
           <View style={styles.chipGrid}>
+            {/* Approved specialty chips */}
             {specialtyChips.map((t) => (
               <TouchableOpacity
                 key={t}
@@ -195,14 +231,22 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
                 ]}
                 onPress={() => setPartType(t)}
               >
-                <ReusableText
-                  text={t}
-                  family="medium"
-                  size={12}
-                  color={partType === t ? C.white : C.secondary}
-                />
+                <ReusableText text={t} family="medium" size={12} color={partType === t ? C.white : C.secondary} />
               </TouchableOpacity>
             ))}
+
+            {/* Pending specialty chips — disabled, with clock indicator */}
+            {pendingChips.map((t) => (
+              <View
+                key={`pending-${t}`}
+                style={[styles.chip, styles.chipPending, { borderColor: C.gray }]}
+              >
+                <Ionicons name="time-outline" size={11} color={C.gray2} style={{ marginRight: 3 }} />
+                <ReusableText text={t} family="medium" size={12} color={C.gray2} numberOfLines={1} />
+              </View>
+            ))}
+
+            {/* Other → selects a one-off type for this listing */}
             {config.allTypes.length > 0 && (
               <TouchableOpacity
                 style={[
@@ -219,6 +263,17 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
                   color={isCustomType ? C.white : C.primary}
                   numberOfLines={1}
                 />
+              </TouchableOpacity>
+            )}
+
+            {/* + Request more — adds to pending list, admin approves */}
+            {config.allTypes.length > 0 && (
+              <TouchableOpacity
+                style={[styles.chip, { borderColor: C.gray2, borderStyle: "dashed", backgroundColor: "transparent" }]}
+                onPress={() => setShowRequestModal(true)}
+              >
+                <Ionicons name="add" size={13} color={C.gray2} />
+                <ReusableText text="Request" family="medium" size={12} color={C.gray2} />
               </TouchableOpacity>
             )}
           </View>
@@ -452,6 +507,67 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         C={C}
       />
 
+      {/* Request specialty modal — multi-select, sends to admin for approval */}
+      <Modal visible={showRequestModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowRequestModal(false)}>
+        <View style={[styles.modalContainer, { backgroundColor: C.white }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: C.gray }]}>
+            <ReusableText text="Request Specialties" family="bold" size={18} color={C.secondary} />
+            <TouchableOpacity onPress={() => { setShowRequestModal(false); setRequestSearch(""); setRequestSelected(new Set()); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={24} color={C.secondary} />
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.requestNote, { backgroundColor: C.offwhite }]}>
+            <Ionicons name="information-circle-outline" size={16} color={C.gray2} />
+            <ReusableText text="Select the parts you sell. Admin will review and approve them to appear as your quick chips." family="regular" size={13} color={C.gray2} />
+          </View>
+          <View style={[styles.searchWrap, { backgroundColor: C.offwhite }]}>
+            <Ionicons name="search-outline" size={16} color={C.gray2} />
+            <TextInput
+              style={[styles.searchInput, { color: C.secondary }]}
+              value={requestSearch}
+              onChangeText={setRequestSearch}
+              placeholder={`Search ${category.toLowerCase()} types…`}
+              placeholderTextColor={C.gray2}
+            />
+          </View>
+          <ScrollView contentContainerStyle={styles.modalList} keyboardShouldPersistTaps="handled">
+            {filteredRequestList.map((t) => {
+              const checked = requestSelected.has(t);
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.modalItem, { borderBottomColor: C.gray }, checked && { backgroundColor: C.primary1 }]}
+                  onPress={() => setRequestSelected((prev) => {
+                    const next = new Set(prev);
+                    checked ? next.delete(t) : next.add(t);
+                    return next;
+                  })}
+                >
+                  <ReusableText text={t} family="regular" size={SIZES.medium} color={checked ? C.primary : C.secondary} />
+                  <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? C.primary : C.gray2} />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          {requestSelected.size > 0 && (
+            <View style={[styles.requestFooter, { backgroundColor: C.white, borderTopColor: C.gray }]}>
+              <TouchableOpacity
+                style={[styles.requestBtn, { backgroundColor: submittingRequest ? C.gray2 : C.primary }]}
+                onPress={() => void submitSpecialtyRequest()}
+                disabled={submittingRequest}
+              >
+                <ReusableText
+                  text={submittingRequest ? "Sending…" : `Request ${requestSelected.size} part${requestSelected.size > 1 ? "s" : ""}`}
+                  family="bold"
+                  size={15}
+                  color="#fff"
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
+
       {/* Full part type list modal */}
       <Modal visible={showFullList} animationType="slide" presentationStyle="pageSheet">
         <View style={[styles.modalContainer, { backgroundColor: C.white }]}>
@@ -590,6 +706,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  chipPending: {
+    opacity: 0.55,
+  },
+
+  requestNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 8,
+    padding: 10,
+  },
+  requestFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  requestBtn: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
   },
 
   conditionRow: { flexDirection: "row", gap: 8 },
