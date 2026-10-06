@@ -12,6 +12,15 @@ export type ApiAssignment = {
   quote: { status?: string; [key: string]: unknown } | null;
 };
 
+export type ApiPayout = {
+  status: "UNPAID" | "PAID";
+  method: "MOMO" | "CASH" | null;
+  amountGhs: number | null;
+  paidAt: string | null;
+  reference: string | null;
+  note?: string | null;
+};
+
 export type ApiOrder = {
   id: string;
   fulfillmentStage: string;
@@ -20,6 +29,8 @@ export type ApiOrder = {
   request: unknown;
   wonItems: { partName: string; condition: string; earnGhs: number; photos: string[] }[];
   totalEarnGhs: number;
+  /** Absent from older API versions; treated as unpaid. */
+  payout?: ApiPayout;
 };
 
 export function mapAssignment(a: ApiAssignment): Assignment {
@@ -45,7 +56,33 @@ export function mapOrder(o: ApiOrder, now: string): Order {
     handed_over_at: o.handedOverAt,
     handover_photos: JSON.stringify(o.handoverPhotos ?? []),
     updated_at: now,
+    payout_status: o.payout?.status ?? "UNPAID",
+    payout_method: o.payout?.method ?? null,
+    payout_amount_ghs: o.payout?.amountGhs ?? null,
+    payout_at: o.payout?.paidAt ?? null,
+    payout_ref: o.payout?.reference ?? null,
   };
+}
+
+/** Totals for the Orders header, computed from the local rows. */
+export function earningsSummary(orders: Pick<Order, "total_earn_ghs" | "payout_status" | "payout_amount_ghs" | "stage">[]) {
+  let earned = 0, paid = 0, owed = 0;
+  for (const o of orders) {
+    earned += o.total_earn_ghs;
+    if (o.payout_status === "PAID") paid += o.payout_amount_ghs ?? o.total_earn_ghs;
+    else if (o.stage === "HANDED_OVER") owed += o.total_earn_ghs;
+  }
+  return { earnedGhs: earned, paidGhs: paid, owedGhs: owed };
+}
+
+export function payoutLabel(o: Pick<Order, "payout_status" | "payout_method" | "payout_at" | "stage">): { text: string; tone: "paid" | "owed" | "muted" } {
+  if (o.payout_status === "PAID") {
+    const method = o.payout_method === "MOMO" ? "MoMo" : o.payout_method === "CASH" ? "cash" : "";
+    const date = o.payout_at ? new Date(o.payout_at).toLocaleDateString([], { day: "numeric", month: "short" }) : "";
+    return { text: `Paid${method ? ` by ${method}` : ""}${date ? ` on ${date}` : ""}`, tone: "paid" };
+  }
+  if (o.stage === "HANDED_OVER") return { text: "Payout pending", tone: "owed" };
+  return { text: "Paid after collection", tone: "muted" };
 }
 
 export function mapTyre(l: ApiTyreListing): TyreListing {

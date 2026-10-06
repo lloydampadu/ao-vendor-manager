@@ -42,6 +42,11 @@ export type Order = {
   handed_over_at: string | null;
   handover_photos: string; // JSON string[]
   updated_at: string;
+  payout_status: string; // "UNPAID" | "PAID"
+  payout_method: string | null; // "MOMO" | "CASH"
+  payout_amount_ghs: number | null;
+  payout_at: string | null;
+  payout_ref: string | null;
 };
 
 export type StageQueueItem = {
@@ -231,6 +236,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_tyre_listings_server ON tyre_listings(server_id);
   CREATE INDEX IF NOT EXISTS idx_light_queue_synced ON light_listing_queue(synced, created_at);
   CREATE INDEX IF NOT EXISTS idx_light_listings_server ON light_listings(server_id);
+  `,
+  // v3 — manual vendor payouts recorded by admin, shown on each order.
+  `
+  ALTER TABLE orders ADD COLUMN payout_status TEXT NOT NULL DEFAULT 'UNPAID';
+  ALTER TABLE orders ADD COLUMN payout_method TEXT;
+  ALTER TABLE orders ADD COLUMN payout_amount_ghs INTEGER;
+  ALTER TABLE orders ADD COLUMN payout_at TEXT;
+  ALTER TABLE orders ADD COLUMN payout_ref TEXT;
   `,
 ];
 
@@ -487,8 +500,9 @@ export async function getCachedTyreCatalog(): Promise<CatalogBrand[]> {
 // ─── Orders ──────────────────────────────────────────────────────────────────
 
 const UPSERT_ORDER_SQL = `
-  INSERT INTO orders (id, stage, won_items, total_earn_ghs, request_data, handed_over_at, handover_photos, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO orders (id, stage, won_items, total_earn_ghs, request_data, handed_over_at, handover_photos, updated_at,
+                      payout_status, payout_method, payout_amount_ghs, payout_at, payout_ref)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET
     stage = excluded.stage,
     won_items = excluded.won_items,
@@ -496,7 +510,12 @@ const UPSERT_ORDER_SQL = `
     request_data = excluded.request_data,
     handed_over_at = excluded.handed_over_at,
     handover_photos = excluded.handover_photos,
-    updated_at = excluded.updated_at`;
+    updated_at = excluded.updated_at,
+    payout_status = excluded.payout_status,
+    payout_method = excluded.payout_method,
+    payout_amount_ghs = excluded.payout_amount_ghs,
+    payout_at = excluded.payout_at,
+    payout_ref = excluded.payout_ref`;
 
 export async function upsertOrders(rows: Order[]): Promise<void> {
   if (rows.length === 0) return;
@@ -505,7 +524,10 @@ export async function upsertOrders(rows: Order[]): Promise<void> {
     const stmt = await db.prepareAsync(UPSERT_ORDER_SQL);
     try {
       for (const o of rows) {
-        await stmt.executeAsync([o.id, o.stage, o.won_items, o.total_earn_ghs, o.request_data, o.handed_over_at, o.handover_photos, o.updated_at]);
+        await stmt.executeAsync([
+          o.id, o.stage, o.won_items, o.total_earn_ghs, o.request_data, o.handed_over_at, o.handover_photos, o.updated_at,
+          o.payout_status, o.payout_method, o.payout_amount_ghs, o.payout_at, o.payout_ref,
+        ]);
       }
     } finally {
       await stmt.finalizeAsync();
