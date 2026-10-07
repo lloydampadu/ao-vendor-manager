@@ -234,9 +234,9 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
 
         {status === "WON" && (
           <Card style={styles.wonCard}>
-            <ReusableText text="🎉 Your quote was selected!" family="bold" size={17} color="#155724" />
+            <ReusableText text="Your quote was selected" family="bold" size={17} color="#155724" />
             <HeightSpacer height={6} />
-            <ReusableText text="Once the customer pays, this moves to your Orders tab with pickup instructions." family="regular" size={SIZES.small} color="#155724" />
+            <ReusableText text="Once the customer pays, it moves to your Orders tab. We will collect it from you and deliver it to the customer." family="regular" size={SIZES.small} color="#155724" />
           </Card>
         )}
 

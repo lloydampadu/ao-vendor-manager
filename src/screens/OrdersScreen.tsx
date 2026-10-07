@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getOrders, type Order } from "@/lib/db";
 import { parseJson } from "@/lib/assignment-status";
 import { earningsSummary, payoutLabel } from "@/lib/mappers";
+import { ORDER_STEPS } from "@/lib/order-steps";
 import { useSyncedQuery, usePullToRefresh } from "@/hooks/useSyncedQuery";
 import { ReusableText, HeightSpacer, InboxSkeletonList, NetworkImage, EmptyState } from "../../components";
 import { vehicleLabel } from "../../components/RequestCard";
@@ -14,11 +15,8 @@ type Props = NativeStackScreenProps<OrdersStackParamList, "OrdersList">;
 
 // The stage enum is reused for the pickup model: AbosseyOkai collects from the
 // vendor, so the vendor only prepares the part and hands it to our rider.
-export const STAGE_LABEL: Record<string, string> = {
-  TO_BRING: "To prepare",
-  ON_THE_WAY: "Ready for pickup",
-  HANDED_OVER: "Collected",
-};
+/** Same names as the order screen's steps. */
+export const STAGE_LABEL: Record<string, string> = Object.fromEntries(ORDER_STEPS.map((s) => [s.stage, s.title]));
 
 type OrderRequest = { partName: string; make?: string | null; model?: string | null; year?: number | null; customerName?: string | null };
 type WonItem = { partName: string; condition: string; earnGhs: number; photos?: string[] };
