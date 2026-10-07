@@ -98,7 +98,7 @@ export default function OrderDetailScreen({ route, navigation }: Props): React.J
 
   return (
     <View style={{ flex: 1, backgroundColor: C.offwhite }}>
-      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: action ? 120 : 32 }]}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.body, { paddingBottom: action ? 16 : insets.bottom + 24 }]}>
         {/* What it is */}
         <View style={card}>
           <ReusableText text={req.partName} family="bold" size={SIZES.large} color={C.secondary} />
@@ -202,7 +202,8 @@ export default function OrderDetailScreen({ route, navigation }: Props): React.J
         </TouchableOpacity>
       </ScrollView>
 
-      {/* The one action for this step, always in reach */}
+      {/* The one action for this step, always in reach. Laid out below the scroll
+          area (not floating over it), so it can never cover the last section. */}
       {action ? (
         <View style={[styles.footer, { backgroundColor: C.white, borderTopColor: C.gray, paddingBottom: insets.bottom + 12 }]}>
           {current ? <ReusableText text={current.hint} family="regular" size={SIZES.small} color={C.gray2} /> : null}
@@ -235,5 +236,5 @@ const styles = StyleSheet.create({
   photos: { marginTop: 6 },
   payoutRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   help: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 14, padding: 14 },
-  footer: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
+  footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
 });
