@@ -67,5 +67,7 @@ export function failureAction(err: unknown): "drop" | "retry" {
   if (err instanceof SyntaxError) return "drop";
   if (!isApiError(err)) return "retry";
   if (err.status === 400 || err.status === 404 || err.status === 409 || err.status === 422) return "drop";
+  // Not on the vendor's approved list: retrying never helps and would block the queue.
+  if (err.status === 403 && (err.body as { code?: unknown } | undefined)?.code === "NOT_APPROVED") return "drop";
   return "retry";
 }

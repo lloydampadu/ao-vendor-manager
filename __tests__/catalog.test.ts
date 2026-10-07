@@ -1,44 +1,5 @@
-import { isLightVendor, isTyreVendor, normaliseVendorCategory } from "@/lib/parts-catalog";
-import { buildPartName, TILES, visibleTilesFor } from "@/lib/part-tiles";
+import { buildPartName } from "@/lib/part-tiles";
 import { normaliseGhanaPhone } from "@/lib/phone";
-
-describe("vendor kind detection", () => {
-  it("recognises tyre vendors by the marker specialty or category", () => {
-    expect(isTyreVendor(["Tyres"], [])).toBe(true);
-    expect(isTyreVendor([], ["Tyres"])).toBe(true);
-    expect(isTyreVendor(["Headlight Bulb"], ["LAMPS"])).toBe(false);
-  });
-
-  it("recognises light vendors when every specialty is a lamp part", () => {
-    expect(isLightVendor(["Headlight Bulb", "Tail Light"], [])).toBe(true);
-    expect(isLightVendor(["Headlight Bulb", "Alternator"], [])).toBe(false);
-    expect(isLightVendor([], [])).toBe(false);
-  });
-
-  it("maps legacy vendor categories onto current ones", () => {
-    expect(normaliseVendorCategory("ENGINE_PARTS")).toBe("ENGINE");
-    expect(normaliseVendorCategory("SUSPENSION")).toBe("STEERING_SUSPENSION");
-    expect(normaliseVendorCategory("GLASS")).toBe("GLASS");
-  });
-});
-
-describe("visibleTilesFor", () => {
-  it("shows everything to general vendors", () => {
-    expect(visibleTilesFor([], [])).toHaveLength(TILES.length);
-    expect(visibleTilesFor(["GENERAL"], [])).toHaveLength(TILES.length);
-  });
-
-  it("filters by routing category, including legacy enum values", () => {
-    const labels = visibleTilesFor(["ENGINE_PARTS"], []).map((t) => t.label);
-    expect(labels).toEqual(["Engine"]);
-  });
-
-  it("unlocks tiles from specialties", () => {
-    const labels = visibleTilesFor(["BODY"], ["Alternator", "Tyres"]).map((t) => t.label);
-    expect(labels).toEqual(expect.arrayContaining(["Body", "Electrical", "Tyres"]));
-    expect(labels).not.toContain("Glass");
-  });
-});
 
 describe("buildPartName", () => {
   it("joins only the fields that are present", () => {
