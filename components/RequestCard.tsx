@@ -6,11 +6,14 @@ import HeightSpacer from "./Reusable/HeightSpacer";
 import Card from "./Card";
 import { SIZES, useThemeColors } from "../constants/theme";
 import type { EffectiveStatus } from "@/lib/assignment-status";
+import { catalogNameLine } from "@/lib/part-tiles";
 
 type RequestItem = { id: string; partName: string };
 
 export type RequestData = {
   partName: string;
+  /** The catalog name for the customer's words, when the server matched one. */
+  catalogPart?: string | null;
   make?: string | null;
   model?: string | null;
   year?: number | null;
@@ -41,6 +44,7 @@ export function RequestCard({ status, requestData, updatedAt, onPress }: Props):
 
   const items = requestData.items ?? [];
   const multi = items.length > 1 ? items : null;
+  const alsoCalled = catalogNameLine(requestData.partName, requestData.catalogPart);
 
   return (
     <Card onPress={onPress} style={urgent ? { borderLeftWidth: 3, borderLeftColor: C.primary } : undefined}>
@@ -57,7 +61,10 @@ export function RequestCard({ status, requestData, updatedAt, onPress }: Props):
               />
             ))
           ) : (
-            <ReusableText text={requestData.partName} family="medium" size={15} color={C.secondary} />
+            <>
+              <ReusableText text={requestData.partName} family="medium" size={15} color={C.secondary} />
+              {alsoCalled ? <ReusableText text={alsoCalled} family="regular" size={12} color={C.gray2} /> : null}
+            </>
           )}
         </View>
         <StatusBadge status={status} />

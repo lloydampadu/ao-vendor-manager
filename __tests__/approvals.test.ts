@@ -2,6 +2,7 @@ import {
   approvalKey, approvedKinds, approvedLampTypes, approvedTypesIn, groupOf, isApproved, needsBrandsStep, onlyKind, requestableSections,
 } from "@/lib/approvals";
 import { productSections } from "@/lib/products";
+import { catalogNameLine } from "@/lib/part-tiles";
 import type { LightListing, TyreListing } from "@/lib/db";
 import type { ApiProduct } from "@/lib/api";
 
@@ -46,16 +47,20 @@ describe("What are you adding?", () => {
 });
 
 describe("asking for approval", () => {
-  it("offers Tyres, Lamps and parts, leaving out what's approved or waiting", () => {
+  it("offers Tyres and parts (lamps as their own group), leaving out what's approved or waiting", () => {
+    expect(requestableSections([], [])[0]).toEqual({ title: "Tyres", items: ["Tyres"] });
     const s = requestableSections(["Tyres", "Fender"], ["Grille"]);
-    expect(s[0]).toEqual({ title: "Whole kinds", items: ["Lamps"] });
+    expect(s.some((x) => x.title === "Tyres")).toBe(false);
+    // Lamps appear once: as the group of lamp types, never as a separate "every lamp" item.
+    expect(s.flatMap((x) => x.items)).not.toContain("Lamps");
+    expect(s.find((x) => x.title === "Lamps")!.items).toContain("Tail Light");
     const body = s.find((x) => x.title === "Body")!.items;
     expect(body).toContain("B Pillar Trim");
     expect(body).not.toContain("Fender");
     expect(body).not.toContain("Grille");
   });
 
-  it("once Lamps is approved or asked for, single lamps aren't offered", () => {
+  it("an older Lamps entry (approved or asked for) means no single lamps are offered", () => {
     expect(requestableSections(["Lamps"], []).some((x) => x.title === "Lamps")).toBe(false);
     expect(requestableSections([], ["Lamps"]).some((x) => x.title === "Lamps")).toBe(false);
   });
@@ -68,6 +73,15 @@ describe("asking for approval", () => {
     expect(groupOf("B Pillar Trim")).toBe("Body");
     expect(groupOf("Tyres")).toBe("Tyres");
     expect(groupOf("Tail Light")).toBe("Lamps");
+  });
+});
+
+describe("the catalog name next to the customer's words", () => {
+  it("shows only when it adds something", () => {
+    expect(catalogNameLine("ABS module", "Anti-Lock Brake Computer")).toBe("Also called Anti-Lock Brake Computer");
+    expect(catalogNameLine("Caliper", "caliper")).toBeNull();
+    expect(catalogNameLine("ABS module", null)).toBeNull();
+    expect(catalogNameLine("ABS module", undefined)).toBeNull();
   });
 });
 
