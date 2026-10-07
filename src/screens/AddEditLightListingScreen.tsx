@@ -1,23 +1,25 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { LightListing } from "@/lib/db";
 import { newLocalId, saveLightListing } from "@/lib/listings";
 import { parseJson } from "@/lib/assignment-status";
 import { PART_CATEGORIES } from "@/lib/parts-catalog";
+import { approvedLampTypes, isApproved, LAMPS } from "@/lib/approvals";
 import { useSyncStore } from "@/store/sync-store";
 import { useAuthStore } from "@/store/auth-store";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { useMakes, useModels, YEARS } from "@/hooks/useVehicleTaxonomy";
 import {
-  ReusableBtn, ReusableText, HeightSpacer, FormField, FormInput, SelectButton, SegmentedButtons, StockToggle, PhotoGrid, PickerModal,
+  ReusableBtn, ReusableText, HeightSpacer, FormField, FormInput, SelectButton, SegmentedButtons, StockToggle, PhotoGrid, PickerModal, RequestApprovalSheet,
 } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
 type RouteProps = RouteProp<ProductsStackParamList, "AddEditLightListing">;
 
-// The 12 most common types as chips; the full Lamps catalog via "Other".
+// With "Lamps" approved: the 12 most common types as chips, the full Lamps
+// catalog via "Other". Otherwise only the lamp types the vendor is approved for.
 const PRIMARY_LIGHT_TYPES = [
   "Headlight Assembly", "Headlight Bulb", "Headlight Housing", "Headlight Lens", "Tail Light", "Tail Light Lens",
   "Fog Lamp", "Fog Lamp Rear", "Third Brake Light", "Turn Signal/Indicator", "Backup Light", "Dome Light",
@@ -56,7 +58,10 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
   const { makes, loading: makesLoading } = useMakes(vendor?.brands);
   const { models, loading: modelsLoading } = useModels(make);
 
-  const isCustomType = lightType !== "" && !PRIMARY_LIGHT_TYPES.includes(lightType);
+  const allLamps = isApproved(vendor?.specialties ?? [], LAMPS);
+  const chips = useMemo(() => (allLamps ? PRIMARY_LIGHT_TYPES : approvedLampTypes(vendor?.specialties ?? [])), [allLamps, vendor?.specialties]);
+  const isCustomType = lightType !== "" && !chips.includes(lightType);
+  const [asking, setAsking] = useState(false);
 
   async function save(): Promise<void> {
     const priceGhs = parseInt(price, 10);
@@ -100,9 +105,23 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
                 </TouchableOpacity>
               );
             })}
-            <TouchableOpacity style={[styles.chip, { borderColor: C.primary, backgroundColor: isCustomType ? C.primary : C.primary1 }]} onPress={() => setPicker("type")} accessibilityRole="button">
-              <ReusableText text={isCustomType ? lightType : "Other →"} family="medium" size={12} color={isCustomType ? C.white : C.primary} numberOfLines={1} />
-            </TouchableOpacity>
+            {allLamps ? (
+              <TouchableOpacity style={[styles.chip, { borderColor: C.primary, backgroundColor: isCustomType ? C.primary : C.primary1 }]} onPress={() => setPicker("type")} accessibilityRole="button">
+                <ReusableText text={isCustomType ? lightType : "Other →"} family="medium" size={12} color={isCustomType ? C.white : C.primary} numberOfLines={1} />
+              </TouchableOpacity>
+            ) : (
+              <>
+                {/* Editing a listing keeps its type even if it isn't on the list. */}
+                {isCustomType ? (
+                  <View style={[styles.chip, { backgroundColor: C.primary, borderColor: C.primary }]}>
+                    <ReusableText text={lightType} family="medium" size={12} color={C.white} numberOfLines={1} />
+                  </View>
+                ) : null}
+                <TouchableOpacity style={[styles.chip, { borderColor: C.gray2, borderStyle: "dashed", backgroundColor: "transparent" }]} onPress={() => setAsking(true)} accessibilityRole="button">
+                  <ReusableText text="+ Ask for another" family="medium" size={12} color={C.gray2} />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </FormField>
 
@@ -144,7 +163,7 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
 
         <ReusableBtn
           onPress={() => void save()}
-          btnText={saving ? "Saving…" : photos.uploading ? "Uploading photo…" : existing ? "Save changes" : "Add light listing"}
+          btnText={saving ? "Saving…" : photos.uploading ? "Uploading photo…" : existing ? "Save changes" : "Add lamp"}
           backgroundColor={saving || photos.uploading ? C.gray2 : C.primary}
           textColor={C.white}
           height={52}
@@ -157,6 +176,7 @@ export default function AddEditLightListingScreen(): React.JSX.Element {
       <PickerModal visible={picker === "make"} title="Select make" items={makes} selected={make} onSelect={(v) => { setMake(v); setModel(""); setPicker(null); }} onClose={() => setPicker(null)} />
       <PickerModal visible={picker === "model"} title="Select model" items={models} selected={model} onSelect={(v) => { setModel(v); setPicker(null); }} onClose={() => setPicker(null)} emptyText={modelsLoading ? "Loading…" : "No models found"} />
       <PickerModal visible={picker === "year"} title="Select year" items={YEARS} selected={year} onSelect={(v) => { setYear(v); setPicker(null); }} onClose={() => setPicker(null)} />
+      <RequestApprovalSheet visible={asking} onClose={() => setAsking(false)} category={LAMPS} />
       <PickerModal visible={picker === "type"} title="All light types" items={ALL_LIGHT_TYPES} selected={lightType} onSelect={(v) => { setLightType(v); setPicker(null); }} onClose={() => setPicker(null)} searchThreshold={0} />
     </>
   );

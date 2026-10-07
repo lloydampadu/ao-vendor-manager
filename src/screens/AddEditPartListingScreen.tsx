@@ -1,16 +1,16 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { PART_CATEGORIES } from "@/lib/parts-catalog";
 import { buildPartName } from "@/lib/part-tiles";
-import { errorMessage, productsApi, specialtyRequestsApi } from "@/lib/api";
+import { approvedTypesIn } from "@/lib/approvals";
+import { errorMessage, productsApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { useMakes, useModels, useVariants, YEARS } from "@/hooks/useVehicleTaxonomy";
 import {
-  ReusableBtn, ReusableText, HeightSpacer, FormField, FormInput, SelectButton, SegmentedButtons, StockToggle, PhotoGrid, PickerModal,
+  ReusableBtn, ReusableText, HeightSpacer, FormField, FormInput, SelectButton, SegmentedButtons, StockToggle, PhotoGrid, PickerModal, RequestApprovalSheet,
 } from "../../components";
 import { SIZES, useThemeColors } from "../../constants/theme";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
@@ -41,7 +41,7 @@ const CATEGORY_CONFIG: Record<string, CategoryConfig> = {
   "Air & Fuel":            { allTypes: PART_CATEGORIES["Air & Fuel"] ?? [],            hasSide: false, hasPosition: false },
 };
 
-type Picker = "make" | "model" | "year" | "engine" | "type" | null;
+type Picker = "make" | "model" | "year" | "engine" | null;
 
 /**
  * Create a generic part, or edit an existing one (price, condition, photos,
@@ -55,12 +55,11 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const { category, product } = route.params;
   const editing = !!product;
   const vendor = useAuthStore((s) => s.vendor);
-  const setVendor = useAuthStore((s) => s.setVendor);
   const config: CategoryConfig = CATEGORY_CONFIG[category] ?? { allTypes: [], hasSide: false, hasPosition: false };
 
-  // Quick chips = the vendor's approved specialties in this category.
+  // Only approved types can be posted (the server checks too); others are asked for.
+  const specialtyChips = useMemo(() => approvedTypesIn(category, vendor?.specialties ?? []), [category, vendor?.specialties]);
   const categorySet = useMemo(() => new Set(config.allTypes), [config.allTypes]);
-  const specialtyChips = (vendor?.specialties ?? []).filter((s) => categorySet.has(s));
   const pendingChips = (vendor?.pendingSpecialties ?? []).filter((s) => categorySet.has(s));
 
   const [partType, setPartType] = useState("");
@@ -81,32 +80,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
   const { models, loading: modelsLoading } = useModels(make);
   const { variants, loading: variantsLoading } = useVariants(make, model, year, category === "Engine");
 
-  // "Request more" — ask admin to approve extra specialties.
   const [showRequest, setShowRequest] = useState(false);
-  const [requestSearch, setRequestSearch] = useState("");
-  const [requestSelected, setRequestSelected] = useState<Set<string>>(new Set());
-  const [submittingRequest, setSubmittingRequest] = useState(false);
-  const alreadyHave = new Set([...specialtyChips, ...pendingChips]);
-  const requestable = config.allTypes.filter((t) => !alreadyHave.has(t));
-  const filteredRequestable = requestSearch.trim() ? requestable.filter((t) => t.toLowerCase().includes(requestSearch.toLowerCase())) : requestable;
-
-  const isCustomType = partType !== "" && !specialtyChips.includes(partType);
-
-  async function submitSpecialtyRequest(): Promise<void> {
-    if (requestSelected.size === 0) return;
-    setSubmittingRequest(true);
-    try {
-      await specialtyRequestsApi.submit(Array.from(requestSelected), category);
-      if (vendor) setVendor({ ...vendor, pendingSpecialties: [...vendor.pendingSpecialties, ...Array.from(requestSelected)] });
-      setRequestSelected(new Set());
-      setShowRequest(false);
-      Alert.alert("Sent to admin", "The parts will appear as quick chips once approved.");
-    } catch (e) {
-      Alert.alert("Couldn't send", errorMessage(e));
-    } finally {
-      setSubmittingRequest(false);
-    }
-  }
 
   async function save(): Promise<void> {
     const priceGhs = parseInt(price, 10);
@@ -124,7 +98,7 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
         await productsApi.update(product.id, { priceGhs, condition, photos: photos.urls, inStock, ...(engineCapacity ? { engineCapacity } : {}) });
       } else {
         const name = buildPartName({ type: partType, side: config.hasSide ? side : "", position: config.hasPosition ? position : "", make, model, year, engine: engineCapacity });
-        await productsApi.create({ name, priceGhs, condition, photos: photos.urls, inStock, category, ...(engineCapacity ? { engineCapacity } : {}) });
+        await productsApi.create({ name, partType, priceGhs, condition, photos: photos.urls, inStock, category, ...(engineCapacity ? { engineCapacity } : {}) });
       }
       nav.goBack();
     } catch (e) {
@@ -162,15 +136,10 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
                   </View>
                 ))}
                 {config.allTypes.length > 0 && (
-                  <>
-                    <TouchableOpacity style={[styles.chip, { borderColor: C.primary, backgroundColor: isCustomType ? C.primary : C.primary1 }]} onPress={() => setPicker("type")} accessibilityRole="button">
-                      <ReusableText text={isCustomType ? partType : "Other →"} family="medium" size={12} color={isCustomType ? C.white : C.primary} numberOfLines={1} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.chip, { borderColor: C.gray2, borderStyle: "dashed", backgroundColor: "transparent" }]} onPress={() => setShowRequest(true)} accessibilityRole="button">
-                      <Ionicons name="add" size={13} color={C.gray2} />
-                      <ReusableText text="Request" family="medium" size={12} color={C.gray2} />
-                    </TouchableOpacity>
-                  </>
+                  <TouchableOpacity style={[styles.chip, { borderColor: C.gray2, borderStyle: "dashed", backgroundColor: "transparent" }]} onPress={() => setShowRequest(true)} accessibilityRole="button">
+                    <Ionicons name="add" size={13} color={C.gray2} />
+                    <ReusableText text="Ask for another" family="medium" size={12} color={C.gray2} />
+                  </TouchableOpacity>
                 )}
               </View>
             </FormField>
@@ -242,55 +211,8 @@ export default function AddEditPartListingScreen(): React.JSX.Element {
       <PickerModal visible={picker === "model"} title="Select model" items={models} selected={model} onSelect={(v) => { setModel(v); setEngineCapacity(""); setPicker(null); }} onClose={() => setPicker(null)} emptyText={modelsLoading ? "Loading…" : "No models found"} />
       <PickerModal visible={picker === "year"} title="Select year" items={YEARS} selected={year} onSelect={(v) => { setYear(v); setEngineCapacity(""); setPicker(null); }} onClose={() => setPicker(null)} />
       <PickerModal visible={picker === "engine"} title="Select engine" items={variants} selected={engineCapacity} onSelect={(v) => { setEngineCapacity(v); setPicker(null); }} onClose={() => setPicker(null)} />
-      <PickerModal visible={picker === "type"} title={`All ${category} types`} items={config.allTypes} selected={partType} onSelect={(v) => { setPartType(v); setPicker(null); }} onClose={() => setPicker(null)} searchThreshold={0} />
+      <RequestApprovalSheet visible={showRequest} onClose={() => setShowRequest(false)} category={category} />
 
-      <Modal visible={showRequest} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowRequest(false)}>
-        <SafeAreaView edges={["top", "bottom"]} style={[styles.modal, { backgroundColor: C.white }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: C.gray }]}>
-            <ReusableText text="Request specialties" family="bold" size={18} color={C.secondary} />
-            <TouchableOpacity onPress={() => { setShowRequest(false); setRequestSearch(""); setRequestSelected(new Set()); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Close">
-              <Ionicons name="close" size={24} color={C.secondary} />
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.note, { backgroundColor: C.offwhite }]}>
-            <Ionicons name="information-circle-outline" size={16} color={C.gray2} />
-            <ReusableText text="Pick the parts you sell. Admin reviews them and they appear as quick chips once approved." family="regular" size={13} color={C.gray2} />
-          </View>
-          <View style={[styles.searchWrap, { backgroundColor: C.offwhite }]}>
-            <Ionicons name="search-outline" size={16} color={C.gray2} />
-            <TextInput style={[styles.searchInput, { color: C.secondary }]} value={requestSearch} onChangeText={setRequestSearch} placeholder={`Search ${category.toLowerCase()} types…`} placeholderTextColor={C.gray2} />
-          </View>
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
-            {filteredRequestable.map((t) => {
-              const checked = requestSelected.has(t);
-              return (
-                <TouchableOpacity
-                  key={t}
-                  style={[styles.modalItem, { borderBottomColor: C.gray }, checked && { backgroundColor: C.primary1 }]}
-                  onPress={() => setRequestSelected((prev) => { const next = new Set(prev); if (checked) next.delete(t); else next.add(t); return next; })}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked }}
-                >
-                  <ReusableText text={t} family="regular" size={SIZES.medium} color={checked ? C.primary : C.secondary} />
-                  <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? C.primary : C.gray2} />
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          {requestSelected.size > 0 && (
-            <View style={[styles.modalFooter, { backgroundColor: C.white, borderTopColor: C.gray }]}>
-              <ReusableBtn
-                onPress={() => void submitSpecialtyRequest()}
-                btnText={submittingRequest ? "Sending…" : `Request ${requestSelected.size} part${requestSelected.size > 1 ? "s" : ""}`}
-                backgroundColor={submittingRequest ? C.gray2 : C.primary}
-                textColor={C.white}
-                height={48}
-                disabled={submittingRequest}
-              />
-            </View>
-          )}
-        </SafeAreaView>
-      </Modal>
     </>
   );
 }
@@ -303,11 +225,4 @@ const styles = StyleSheet.create({
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 3 },
   chipPending: { opacity: 0.55 },
-  modal: { flex: 1 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
-  note: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginHorizontal: 16, marginTop: 12, marginBottom: 4, borderRadius: 8, padding: 10 },
-  searchWrap: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginVertical: 12, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  searchInput: { flex: 1, fontFamily: "regular", fontSize: SIZES.medium, padding: 0 },
-  modalItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
-  modalFooter: { padding: 16, borderTopWidth: 1 },
 });

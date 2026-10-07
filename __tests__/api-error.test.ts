@@ -16,12 +16,14 @@ describe("failureAction", () => {
     expect(failureAction(new ApiError("not found", 404))).toBe("drop");
     expect(failureAction(new ApiError("bad body", 400))).toBe("drop");
     expect(failureAction(new SyntaxError("Unexpected token"))).toBe("drop");
+    expect(failureAction(new ApiError("not approved", 403, { code: "NOT_APPROVED" }))).toBe("drop");
   });
 
   it("retries transient failures", () => {
     expect(failureAction(new ApiError("offline", 0))).toBe("retry");
     expect(failureAction(new ApiError("deploying", 502))).toBe("retry");
     expect(failureAction(new Error("sqlite busy"))).toBe("retry");
+    expect(failureAction(new ApiError("forbidden", 403))).toBe("retry");
   });
 });
 

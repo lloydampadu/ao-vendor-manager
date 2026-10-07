@@ -11,7 +11,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { errorMessage, vendorAuthApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
-import { PART_CATEGORIES, CATEGORY_ICONS, TYRES_SPECIALTY, isTyreVendor } from "@/lib/parts-catalog";
+import { PART_CATEGORIES, CATEGORY_ICONS } from "@/lib/parts-catalog";
+import { LAMPS, TYRES, needsBrandsStep } from "@/lib/approvals";
 import { ReusableText, HeightSpacer } from "../../components";
 import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
 
@@ -26,25 +27,13 @@ export default function OnboardingScreen(): React.JSX.Element {
   const setVendor = useAuthStore((s) => s.setVendor);
   const setOnboardingStep = useAuthStore((s) => s.setOnboardingStep);
 
-  const [selected, setSelected] = useState<Set<string>>(
-    // Never seed the tyres marker into the parts set — tyres is its own mode.
-    new Set((vendor?.specialties ?? []).filter((s) => s !== TYRES_SPECIALTY))
-  );
-  const [tyres, setTyres] = useState<boolean>(isTyreVendor(vendor?.specialties));
+  // Parts, "Tyres" and "Lamps" are all entries on one list; pick any mix.
+  const [selected, setSelected] = useState<Set<string>>(new Set(vendor?.specialties ?? []));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Tyres and car parts are mutually exclusive: picking one clears the other.
-  const toggleTyres = useCallback(() => {
-    setTyres((prev) => {
-      if (!prev) setSelected(new Set());
-      return !prev;
-    });
-  }, []);
-
   const toggleItem = useCallback((item: string) => {
-    setTyres(false);
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(item) ? next.delete(item) : next.add(item);
@@ -62,7 +51,6 @@ export default function OnboardingScreen(): React.JSX.Element {
 
   const toggleAll = useCallback((category: string) => {
     const parts = PART_CATEGORIES[category] ?? [];
-    setTyres(false);
     setSelected((prev) => {
       const next = new Set(prev);
       const allSelected = parts.every((p) => next.has(p));
@@ -96,21 +84,21 @@ export default function OnboardingScreen(): React.JSX.Element {
       }));
 
   async function save() {
-    if (!tyres && selected.size === 0) {
+    if (selected.size === 0) {
       Alert.alert("Select what you sell to continue");
       return;
     }
     setSaving(true);
     try {
-      const specialties = tyres ? [TYRES_SPECIALTY] : Array.from(selected);
-      const { specialties: saved, categories } = await vendorAuthApi.setSpecialties(specialties);
+      const { specialties: saved, categories } = await vendorAuthApi.setSpecialties(Array.from(selected));
 
-      // Tyres fit all cars, so brands don't apply: an empty list means "all
-      // brands" (same convention as the admin panel) and we skip the step.
-      const brands = tyres ? (await vendorAuthApi.setBrands([])).brands : vendor?.brands ?? [];
+      // Tyres fit all cars, so a tyres-only vendor skips brands: an empty list
+      // means "all brands" (same convention as the admin panel).
+      const brandsStep = needsBrandsStep(saved);
+      const brands = brandsStep ? vendor?.brands ?? [] : (await vendorAuthApi.setBrands([])).brands;
       if (vendor) setVendor({ ...vendor, specialties: saved, categories, brands });
-      // Parts vendors pick their brands next; the navigator reacts to this flag.
-      setOnboardingStep(tyres ? null : "brands");
+      // Everyone else picks their brands next; the navigator reacts to this flag.
+      setOnboardingStep(brandsStep ? "brands" : null);
     } catch (e) {
       Alert.alert("Couldn't save", errorMessage(e));
     } finally {
@@ -119,7 +107,32 @@ export default function OnboardingScreen(): React.JSX.Element {
   }
 
   const totalSelected = selected.size;
-  const canContinue = tyres || totalSelected > 0;
+  const canContinue = totalSelected > 0;
+
+  const wholeKind = (item: string, label: string, hint: string, icon: React.ComponentProps<typeof Ionicons>["name"]) => {
+    const on = selected.has(item);
+    return (
+      <TouchableOpacity
+        key={item}
+        style={[styles.tyresCard, { backgroundColor: C.white, borderColor: on ? C.primary : C.gray }, on && { backgroundColor: C.primary1 }]}
+        onPress={() => toggleItem(item)}
+        activeOpacity={0.7}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: on }}
+      >
+        <View style={[styles.catIcon, { backgroundColor: on ? C.primary : C.gray }]}>
+          <Ionicons name={icon} size={18} color={C.white} />
+        </View>
+        <View style={{ marginLeft: 12, flex: 1 }}>
+          <ReusableText text={label} family="bold" size={15} color={C.secondary} />
+          <ReusableText text={hint} family="regular" size={12} color={C.gray2} />
+        </View>
+        <View style={[styles.checkbox, on && { backgroundColor: C.primary, borderColor: C.primary }]}>
+          {on && <Ionicons name="checkmark" size={13} color={C.white} />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.offwhite }]}>
@@ -127,7 +140,7 @@ export default function OnboardingScreen(): React.JSX.Element {
         <ReusableText text="What do you sell?" family="bold" size={22} color={C.secondary} />
         <HeightSpacer height={4} />
         <ReusableText
-          text="Sell tyres, or pick the car parts you sell — one or the other, not both."
+          text="Pick everything you sell: tyres, lamps and car parts, in any mix."
           family="regular"
           size={13}
           color={C.gray2}
@@ -153,26 +166,12 @@ export default function OnboardingScreen(): React.JSX.Element {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <TouchableOpacity
-            style={[
-              styles.tyresCard,
-              { backgroundColor: C.white, borderColor: tyres ? C.primary : C.gray },
-              tyres && { backgroundColor: C.primary1 },
-            ]}
-            onPress={toggleTyres}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.catIcon, { backgroundColor: tyres ? C.primary : C.gray }]}>
-              <Ionicons name="car-sport-outline" size={18} color={C.white} />
+          lowerSearch ? null : (
+            <View>
+              {wholeKind(TYRES, "Tyres", "Every kind of tyre", "car-sport-outline")}
+              {wholeKind(LAMPS, "Lamps", "Every kind of lamp and light", "bulb-outline")}
             </View>
-            <View style={{ marginLeft: 12, flex: 1 }}>
-              <ReusableText text="Tyres" family="bold" size={15} color={C.secondary} />
-              <ReusableText text="I sell tyres (not car parts)" family="regular" size={12} color={C.gray2} />
-            </View>
-            <View style={[styles.checkbox, tyres && { backgroundColor: C.primary, borderColor: C.primary }]}>
-              {tyres && <Ionicons name="checkmark" size={13} color={C.white} />}
-            </View>
-          </TouchableOpacity>
+          )
         }
         renderSectionHeader={({ section }) => {
           const isOpen = lowerSearch ? true : expanded.has(section.title);
@@ -271,11 +270,9 @@ export default function OnboardingScreen(): React.JSX.Element {
             text={
               saving
                 ? "Saving…"
-                : tyres
-                ? "Continue with Tyres"
                 : totalSelected === 0
                 ? "Select what you sell to continue"
-                : `Save ${totalSelected} part${totalSelected === 1 ? "" : "s"}`
+                : `Save ${totalSelected} item${totalSelected === 1 ? "" : "s"}`
             }
             family="bold"
             size={16}

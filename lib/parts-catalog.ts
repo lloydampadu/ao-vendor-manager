@@ -36,30 +36,6 @@ export const PART_CATEGORIES: Record<string, string[]> = {
   ],
 };
 
-// A vendor sells EITHER tyres OR car parts, never both. When a vendor picks
-// tyres during onboarding we store this single marker as their specialty.
-export const TYRES_SPECIALTY = "Tyres";
-
-// True when the vendor onboarded as a tyre seller (see TYRES_SPECIALTY).
-export function isTyreVendor(specialties?: string[] | null, categories?: string[] | null): boolean {
-  if (specialties?.includes(TYRES_SPECIALTY)) return true;
-  if (categories && categories.length > 0 && categories.every((c) => c === "Tyres")) return true;
-  return false;
-}
-
-// Lamp/light vendors have a dedicated listing screen.
-// A vendor is a light vendor if:
-//   - Their categories (routing groups) contains only "Lamps", OR
-//   - Their specialties (parts they stock) are all Lamps-category parts.
-const LAMPS_PARTS = new Set(PART_CATEGORIES["Lamps"] ?? []);
-
-export function isLightVendor(specialties?: string[] | null, categories?: string[] | null): boolean {
-  if (specialties?.includes("Lamps")) return true;
-  if (categories && categories.length > 0 && categories.every((c) => c === "Lamps")) return true;
-  if (!specialties || specialties.length === 0) return false;
-  return specialties.every((s) => LAMPS_PARTS.has(s));
-}
-
 export const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "Air & Fuel":           "flame-outline",
   "Axle & Brakes":        "disc-outline",
@@ -73,17 +49,3 @@ export const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "Steering & Suspension":"git-branch-outline",
   "Transmission":         "swap-horizontal-outline",
 };
-
-// The server's VendorCategory enum still carries legacy values from before the
-// per-category split. Map them onto the current ones so tile filters and
-// "what do you sell" logic treat old and new vendors the same.
-const LEGACY_VENDOR_CATEGORY: Record<string, string> = {
-  ENGINE_PARTS: "ENGINE",
-  BODY_PARTS: "BODY",
-  ELECTRICALS: "ELECTRICAL",
-  SUSPENSION: "STEERING_SUSPENSION",
-};
-
-export function normaliseVendorCategory(category: string): string {
-  return LEGACY_VENDOR_CATEGORY[category] ?? category;
-}
