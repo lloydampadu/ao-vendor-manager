@@ -101,7 +101,7 @@ export function RequestApprovalSheet({ visible, onClose, category }: Props): Rea
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked }}
               >
-                <ReusableText text={item === "Tyres" ? "Tyres (every kind)" : item === "Lamps" ? "Lamps (every kind)" : item} family="regular" size={SIZES.medium} color={checked ? C.primary : C.secondary} />
+                <ReusableText text={item === "Tyres" ? "Tyres (every kind)" : item} family="regular" size={SIZES.medium} color={checked ? C.primary : C.secondary} />
                 <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? C.primary : C.gray2} />
               </TouchableOpacity>
             );

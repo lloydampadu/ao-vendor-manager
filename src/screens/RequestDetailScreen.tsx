@@ -15,6 +15,7 @@ import {
   type QuoteSyncStatus,
 } from "@/lib/db";
 import { api, errorMessage } from "@/lib/api";
+import { catalogNameLine } from "@/lib/part-tiles";
 import { refreshAssignment } from "@/lib/sync";
 import { effectiveStatus, parseJson, type EffectiveStatus } from "@/lib/assignment-status";
 import { REQUEST_EXPIRY_DAYS } from "@/constants/support";
@@ -32,6 +33,7 @@ type Props = NativeStackScreenProps<InboxStackParamList, "RequestDetail">;
 
 type RequestData = {
   partName: string;
+  catalogPart?: string | null;
   make?: string | null;
   model?: string | null;
   year?: number | null;
@@ -192,7 +194,12 @@ export default function RequestDetailScreen({ navigation, route }: Props): React
               {multiItems ? (
                 multiItems.map((it, i) => <ReusableText key={it.id} text={`${i + 1}. ${it.partName}`} family={i === 0 ? "bold" : "medium"} size={16} color={C.secondary} />)
               ) : (
-                <ReusableText text={req.partName} family="bold" size={18} color={C.secondary} />
+                <>
+                  <ReusableText text={req.partName} family="bold" size={18} color={C.secondary} />
+                  {catalogNameLine(req.partName, req.catalogPart) ? (
+                    <ReusableText text={catalogNameLine(req.partName, req.catalogPart)!} family="regular" size={13} color={C.gray2} />
+                  ) : null}
+                </>
               )}
             </View>
             <WidthSpacer width={8} />

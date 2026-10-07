@@ -3,9 +3,10 @@ import { PART_CATEGORIES } from "./parts-catalog";
 import { TILES } from "./part-tiles";
 
 // One approval rule (the server enforces the same): a vendor posts only what is
-// on their approved list (vendor.specialties). Tyres and Lamps are entries on
-// that list like any part; a specific lamp part ("Tail Light") also lets them
-// post lamps of that type. Anything else is asked for and an admin approves it.
+// on their approved list (vendor.specialties). "Tyres" is one entry (tyres have
+// no list of types); lamps are a group of types like any other ("Tail Light").
+// An older "Lamps" entry still means every lamp. Anything else is asked for and
+// an admin approves it.
 
 export const TYRES = "Tyres";
 export const LAMPS = "Lamps";
@@ -70,20 +71,19 @@ export function onlyKind(kinds: readonly ProductKind[]): ProductKind | null {
 export type RequestSection = { title: string; items: string[] };
 
 /**
- * What can still be asked for, grouped for the request sheet: the whole kinds
- * first (Tyres, Lamps), then each catalog group. Approved and waiting items are
- * left out. `category` narrows it to one group.
+ * What can still be asked for, grouped for the request sheet: Tyres first, then
+ * each catalog group (Lamps included). Approved and waiting items are left out.
+ * `category` narrows it to one group.
  */
 export function requestableSections(specialties: readonly string[], pending: readonly string[], category?: string): RequestSection[] {
   const open = (item: string) => !isApproved(specialties, item) && !isApproved(pending, item);
   const sections: RequestSection[] = [];
   if (!category) {
-    const whole = [TYRES, LAMPS].filter(open);
-    if (whole.length) sections.push({ title: "Whole kinds", items: whole });
+    if (open(TYRES)) sections.push({ title: "Tyres", items: [TYRES] });
   }
   for (const [title, parts] of Object.entries(PART_CATEGORIES)) {
     if (category && title !== category) continue;
-    // Every lamp is covered by "Lamps" once approved or asked for.
+    // An older "Lamps" entry (approved or asked for) already covers every lamp.
     if (title === LAMPS && !open(LAMPS)) continue;
     const items = parts.filter(open);
     if (items.length) sections.push({ title, items });

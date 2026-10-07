@@ -24,6 +24,15 @@ export const TILES: CategoryTile[] = [
   { label: "Air & Fuel",   icon: "flame-outline",            partCategory: "Air & Fuel",            vendorCategory: "AIR_FUEL" },
 ];
 
+/**
+ * The catalog name the server matched a customer's words to ("ABS module" →
+ * "Anti-Lock Brake Computer"), shown under them. Null when it adds nothing.
+ */
+export function catalogNameLine(partName: string, catalogPart?: string | null): string | null {
+  if (!catalogPart) return null;
+  return catalogPart.trim().toLowerCase() === partName.trim().toLowerCase() ? null : `Also called ${catalogPart}`;
+}
+
 /** Builds the stored product name from the structured add-part fields. */
 export function buildPartName(parts: { type: string; side?: string; position?: string; make?: string; model?: string; year?: string; engine?: string }): string {
   const out: string[] = [parts.type.trim()];

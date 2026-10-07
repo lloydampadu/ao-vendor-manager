@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { errorMessage, vendorAuthApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { PART_CATEGORIES, CATEGORY_ICONS } from "@/lib/parts-catalog";
-import { LAMPS, TYRES, needsBrandsStep } from "@/lib/approvals";
+import { TYRES, needsBrandsStep } from "@/lib/approvals";
 import { ReusableText, HeightSpacer } from "../../components";
 import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
 
@@ -140,7 +140,7 @@ export default function OnboardingScreen(): React.JSX.Element {
         <ReusableText text="What do you sell?" family="bold" size={22} color={C.secondary} />
         <HeightSpacer height={4} />
         <ReusableText
-          text="Pick everything you sell: tyres, lamps and car parts, in any mix."
+          text="Pick everything you sell: tyres, lamps and other car parts, in any mix."
           family="regular"
           size={13}
           color={C.gray2}
@@ -169,7 +169,6 @@ export default function OnboardingScreen(): React.JSX.Element {
           lowerSearch ? null : (
             <View>
               {wholeKind(TYRES, "Tyres", "Every kind of tyre", "car-sport-outline")}
-              {wholeKind(LAMPS, "Lamps", "Every kind of lamp and light", "bulb-outline")}
             </View>
           )
         }
