@@ -26,15 +26,17 @@ type Props = {
   titleSize?: number;
   /** Small warning line under the price (e.g. the tyre price note). */
   note?: string | null;
+  /** Only Delete is offered: no edit tap, no stock switch (a listing the server refused for good). */
+  deleteOnly?: boolean;
 };
 
 /** One tile in a 2-up listing grid (tyres, lights, generic parts). */
-export function ListingCard({ title, subtitle, priceGhs, condition, photo, inStock, placeholderIcon, onPress, onDelete, onToggleStock, titleSize = 14, note }: Props) {
+export function ListingCard({ title, subtitle, priceGhs, condition, photo, inStock, placeholderIcon, onPress, onDelete, onToggleStock, titleSize = 14, note, deleteOnly = false }: Props) {
   const C = useThemeColors();
   const tag = CONDITION_TAG[condition] ?? { label: condition, color: C.gray2 };
   return (
     <View style={[styles.card, { backgroundColor: C.white }]}>
-      <TouchableOpacity activeOpacity={0.85} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Edit ${title}`}>
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress} disabled={deleteOnly} accessibilityRole={deleteOnly ? undefined : "button"} accessibilityLabel={deleteOnly ? title : `Edit ${title}`}>
         <View style={styles.photoWrap}>
           {photo ? (
             <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" cachePolicy="disk" />
@@ -60,7 +62,7 @@ export function ListingCard({ title, subtitle, priceGhs, condition, photo, inSto
       </TouchableOpacity>
 
       {/* Tap the pill to flip stock instantly — the main day-to-day action. */}
-      <TouchableOpacity
+      {!deleteOnly ? (<TouchableOpacity
         activeOpacity={0.7}
         onPress={onToggleStock}
         style={[styles.stockPill, inStock ? styles.stockOk : styles.stockOut]}
@@ -70,7 +72,7 @@ export function ListingCard({ title, subtitle, priceGhs, condition, photo, inSto
         <View style={[styles.dot, { backgroundColor: inStock ? C.green : C.red }]} />
         <View style={{ width: 6 }} />
         <ReusableText text={inStock ? "In stock" : "Sold out"} family="bold" size={12} color={inStock ? C.green : C.red} />
-      </TouchableOpacity>
+      </TouchableOpacity>) : null}
     </View>
   );
 }

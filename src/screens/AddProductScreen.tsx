@@ -6,6 +6,7 @@ import { ReusableText, HeightSpacer, RequestApprovalSheet } from "../../componen
 import { useThemeColors } from "../../constants/theme";
 import { useAuthStore } from "@/store/auth-store";
 import { approvedKinds, onlyKind, type ProductKind } from "@/lib/approvals";
+import { getCachedFluidCatalog } from "@/lib/db";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
 type Props = NativeStackScreenProps<ProductsStackParamList, "AddProduct">;
@@ -18,13 +19,16 @@ type Props = NativeStackScreenProps<ProductsStackParamList, "AddProduct">;
 export default function AddProductScreen({ navigation }: Props): React.JSX.Element {
   const C = useThemeColors();
   const vendor = useAuthStore((s) => s.vendor);
-  const kinds = useMemo(() => approvedKinds(vendor?.specialties ?? []), [vendor?.specialties]);
+  const [fluidKinds, setFluidKinds] = useState<string[]>([]);
+  useEffect(() => { void getCachedFluidCatalog().then((c) => setFluidKinds(c?.kinds.map((k) => k.name) ?? [])); }, []);
+  const kinds = useMemo(() => approvedKinds(vendor?.specialties ?? [], fluidKinds), [vendor?.specialties, fluidKinds]);
   const pending = vendor?.pendingSpecialties ?? [];
   const [asking, setAsking] = useState(false);
 
   function open(kind: ProductKind): void {
     if (kind.form === "tyre") navigation.replace("AddEditTyreListing", {});
     else if (kind.form === "lamp") navigation.replace("AddEditLightListing", {});
+    else if (kind.form === "fluid") navigation.replace("AddEditFluidListing", {});
     else navigation.replace("AddEditPartListing", { category: kind.partCategory! });
   }
 

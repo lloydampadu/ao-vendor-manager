@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { errorMessage, vendorAuthApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth-store";
 import { PART_CATEGORIES, CATEGORY_ICONS } from "@/lib/parts-catalog";
-import { TYRES, needsBrandsStep } from "@/lib/approvals";
+import { OILS_FLUIDS, TYRES, needsBrandsStep } from "@/lib/approvals";
 import { ReusableText, HeightSpacer } from "../../components";
 import { SIZES, SHADOWS, useThemeColors } from "../../constants/theme";
 
@@ -169,6 +169,7 @@ export default function OnboardingScreen(): React.JSX.Element {
           lowerSearch ? null : (
             <View>
               {wholeKind(TYRES, "Tyres", "Every kind of tyre", "car-sport-outline")}
+              {wholeKind(OILS_FLUIDS, "Oils & fluids", "Engine oil, coolant, brake fluid and more", "water-outline")}
             </View>
           )
         }
