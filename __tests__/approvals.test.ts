@@ -1,5 +1,5 @@
 import {
-  approvalKey, approvedFluidKinds, approvedKinds, approvedLampTypes, approvedTypesIn, canListFluidKind, groupOf, isApproved, needsBrandsStep, OILS_FLUIDS, onlyKind, requestableSections,
+  approvalKey, approvedFluidKinds, autoOpenKind, approvedKinds, approvedLampTypes, approvedTypesIn, canListFluidKind, groupOf, isApproved, needsBrandsStep, OILS_FLUIDS, onlyKind, requestableSections,
 } from "@/lib/approvals";
 import { productSections } from "@/lib/products";
 import { catalogNameLine } from "@/lib/part-tiles";
@@ -108,6 +108,15 @@ describe("one Products list", () => {
   it("leaves out empty kinds", () => {
     expect(productSections([], [], [part("p1", "Body")]).map((x) => x.key)).toEqual(["Body"]);
     expect(productSections([], [], [])).toEqual([]);
+  });
+});
+
+describe("autoOpenKind", () => {
+  it("waits for the cached fluid kinds, so a Tyres + one-kind vendor is not sent to Tyres", () => {
+    expect(autoOpenKind(approvedKinds(["Tyres", "Engine oil"]), false)).toBeNull();
+    expect(autoOpenKind(approvedKinds(["Tyres", "Engine oil"], ["Engine oil"]), true)).toBeNull();
+    expect(autoOpenKind(approvedKinds(["Tyres"]), false)).toBeNull();
+    expect(autoOpenKind(approvedKinds(["Tyres"]), true)).toMatchObject({ form: "tyre" });
   });
 });
 

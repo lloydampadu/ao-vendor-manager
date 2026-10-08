@@ -29,7 +29,10 @@ export function RequestApprovalSheet({ visible, onClose, category }: Props): Rea
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [fluidKinds, setFluidKinds] = useState<string[]>([]);
-  useEffect(() => { void getCachedFluidCatalog().then((c) => setFluidKinds(c?.kinds.map((k) => k.name) ?? [])); }, []);
+  // Re-read on every open: the catalog may have been cached since the sheet mounted.
+  useEffect(() => {
+    if (visible) void getCachedFluidCatalog().then((c) => setFluidKinds(c?.kinds.map((k) => k.name) ?? [])).catch(() => {});
+  }, [visible]);
 
   const sections = useMemo(() => {
     const q = search.trim().toLowerCase();

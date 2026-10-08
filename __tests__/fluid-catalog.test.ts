@@ -14,6 +14,14 @@ const catalog: ApiFluidCatalog = {
 };
 const pick: FluidPick = { kindId: "k-oil", brandId: "b-total", brandName: "", product: "Quartz 9000", grade: "5W-40", colour: "", mix: "", size: "4 L", genuine: true };
 
+describe("fluidNote order", () => {
+  it("shows the price check before waiting for approval, and hidden before both", () => {
+    expect(fluidNote({ status: "PENDING", review_status: "PRICE_CHECK" })).toBe("We're checking this price. Customers see it once it's cleared.");
+    expect(fluidNote({ status: "LOCAL", review_status: "PRICE_CHECK" })).toBe("We're checking this price. Customers see it once it's cleared.");
+    expect(fluidNote({ status: "PENDING", review_status: "PRICE_CHECK", hidden: 1, hidden_reason: "x" })).toBe("Hidden by AbosseyOkai Direct: x");
+  });
+});
+
 describe("fluid catalog helpers", () => {
   it("lists a brand's product lines for a kind, A to Z", () => {
     expect(linesFor(catalog, "k-oil", "b-total")).toEqual(["Quartz 7000", "Quartz 9000"]);

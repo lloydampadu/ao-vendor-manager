@@ -78,6 +78,11 @@ export function needsBrandsStep(specialties: readonly string[]): boolean {
   return !(specialties.length > 0 && specialties.every((s) => [TYRES, OILS_FLUIDS].some((x) => approvalKey(s) === approvalKey(x))));
 }
 
+/** The kind to open straight away, only once the cached fluid kinds are read (they can add a second kind). */
+export function autoOpenKind(kinds: readonly ProductKind[], fluidKindsLoaded: boolean): ProductKind | null {
+  return fluidKindsLoaded ? onlyKind(kinds) : null;
+}
+
 /** "What are you adding?" is skipped when there is exactly one kind to add. */
 export function onlyKind(kinds: readonly ProductKind[]): ProductKind | null {
   return kinds.length === 1 ? kinds[0] : null;

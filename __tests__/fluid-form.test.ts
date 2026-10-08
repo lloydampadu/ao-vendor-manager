@@ -1,7 +1,7 @@
 import type { ApiFluidCatalog } from "@/lib/api";
 import type { FluidListing } from "@/lib/db";
 import {
-  ALREADY_LISTED_MESSAGE, NOT_LISTED, NO_GRADE, brandOptions, chooseBrand, chooseKind, emptyPick, findExistingFluid, gradeOptions, productOptions, typedProduct,
+  ALREADY_LISTED_MESSAGE, NOT_LISTED, NO_GRADE, brandOptions, chooseBrand, chooseKind, emptyPick, findExistingFluid, gradeOptions, productOptions, reconcilePick, typedProduct,
 } from "@/lib/fluid-form";
 
 const catalog: ApiFluidCatalog = {
@@ -34,6 +34,31 @@ describe("fluid form pickers", () => {
   });
   it("a typed product line only sets the product, never the brand", () => {
     expect(typedProduct(full, "Titan GT1")).toMatchObject({ brandId: "b-total", product: "Titan GT1" });
+  });
+});
+
+describe("reconcilePick", () => {
+  const kinds = [{ id: "k-oil" }, { id: "k-brake" }];
+  it("keeps a valid pick as the very same object", () => {
+    expect(reconcilePick(catalog, kinds, full)).toBe(full);
+  });
+  it("clears everything when the kind is no longer approved or is gone", () => {
+    expect(reconcilePick(catalog, [{ id: "k-brake" }], full)).toEqual(emptyPick());
+    expect(reconcilePick({ ...catalog, kinds: [catalog.kinds[1]] }, kinds, full)).toEqual(emptyPick());
+  });
+  it("drops a brand that is gone together with its product and tick", () => {
+    expect(reconcilePick({ ...catalog, brands: [catalog.brands[1]] }, kinds, full)).toMatchObject({ brandId: null, product: "", genuine: false, kindId: "k-oil", size: "4 L" });
+  });
+  it("drops a product line, grade, size, colour or mix that is gone, but keeps a typed product", () => {
+    expect(reconcilePick({ ...catalog, lines: [] }, kinds, full).product).toBe("");
+    expect(reconcilePick({ ...catalog, lines: [] }, kinds, full, true).product).toBe("Quartz 9000");
+    expect(reconcilePick({ ...catalog, kinds: [{ ...catalog.kinds[0], grades: ["5W-30"] }, catalog.kinds[1]] }, kinds, full).grade).toBe("");
+    expect(reconcilePick({ ...catalog, sizes: [] }, kinds, full).size).toBe("");
+    const cool = { ...catalog, kinds: [{ id: "k-c", slug: "c", name: "Coolant", grades: [], gradeRequired: false, coolant: true }], coolantColours: [{ value: "red", label: "Red" }], coolantMixes: [{ value: "rm", label: "RM" }] };
+    const p = { ...full, kindId: "k-c", grade: "", colour: "red", mix: "rm" };
+    expect(reconcilePick(cool, [{ id: "k-c" }], p, true)).toBe(p);
+    expect(reconcilePick({ ...cool, coolantColours: [] }, [{ id: "k-c" }], p, true).colour).toBe("");
+    expect(reconcilePick({ ...cool, coolantMixes: [] }, [{ id: "k-c" }], p, true).mix).toBe("");
   });
 });
 

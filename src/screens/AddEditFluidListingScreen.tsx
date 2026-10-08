@@ -5,9 +5,9 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { cacheFluidCatalog, getCachedFluidCatalog, getFluidListings, type FluidListing } from "@/lib/db";
 import { fluidCatalogApi, type ApiFluidCatalog } from "@/lib/api";
-import { fluidListingTitle, kindOf, pickProblem, type FluidPick } from "@/lib/fluid-catalog";
+import { fluidListingTitle, fluidNote, kindOf, pickProblem, type FluidPick } from "@/lib/fluid-catalog";
 import {
-  ALREADY_LISTED_MESSAGE, NOT_LISTED, NO_GRADE, brandOptions, chooseBrand, chooseKind, emptyPick, findExistingFluid, gradeOptions, productOptions,
+  ALREADY_LISTED_MESSAGE, NOT_LISTED, NO_GRADE, brandOptions, chooseBrand, chooseKind, emptyPick, findExistingFluid, gradeOptions, productOptions, reconcilePick,
 } from "@/lib/fluid-form";
 import { approvedFluidKinds } from "@/lib/approvals";
 import { newLocalId, saveFluidListing } from "@/lib/listings";
@@ -24,6 +24,7 @@ type RouteProps = RouteProp<ProductsStackParamList, "AddEditFluidListing">;
 type Picker = "kind" | "brand" | "product" | "grade" | "colour" | "mix" | "size" | null;
 const MAX_PHOTOS = 4;
 const LOADING = "Loading…";
+const NO_LIST = "Connect to the internet once to load the list";
 
 /**
  * Oils & fluids listing: every field is a dropdown from our catalog, so the same product is one
@@ -45,22 +46,30 @@ export default function AddEditFluidListingScreen(): React.JSX.Element {
   const [inStock, setInStock] = useState(existing ? existing.in_stock === 1 : true);
   const [picker, setPicker] = useState<Picker>(null);
   const [saving, setSaving] = useState(false);
+  const [cacheRead, setCacheRead] = useState(false);
+  const [fetchFailed, setFetchFailed] = useState(false);
   const photos = usePhotoUpload({ max: MAX_PHOTOS, allowDeferred: true, initial: existing ? parseJson<string[]>(existing.photos, []) : [] });
 
   // The cached catalog first (so it works offline), then a fresh copy when online.
   useEffect(() => {
     let live = true;
-    void getCachedFluidCatalog().then((c) => { if (live && c) setCatalog((prev) => prev ?? c); });
-    fluidCatalogApi.get().then((c) => { if (live) { setCatalog(c); void cacheFluidCatalog(c); } }).catch(() => {});
+    void getCachedFluidCatalog().then((c) => { if (live && c) setCatalog((prev) => prev ?? c); }).catch(() => {}).finally(() => { if (live) setCacheRead(true); });
+    fluidCatalogApi.get().then((c) => { if (live) { setCatalog(c); void cacheFluidCatalog(c); } }).catch(() => { if (live) setFetchFailed(true); });
     return () => { live = false; };
   }, []);
 
   const loading = !catalog;
+  // No saved copy and no network: say so instead of "Loading…" for ever.
+  const noList = !catalog && cacheRead && fetchFailed;
   const kinds = useMemo(() => (catalog ? approvedFluidKinds(specialties, catalog.kinds) : []), [catalog, specialties]);
+  // A fresh catalog or a withdrawn approval can invalidate earlier picks: drop them.
+  useEffect(() => {
+    if (catalog) setPick((p) => reconcilePick(catalog, kinds, p, typedLine));
+  }, [catalog, kinds, typedLine]);
   const kind = catalog && pick.kindId ? kindOf(catalog, pick.kindId) : null;
   const brandName = pick.brandId ? catalog?.brands.find((b) => b.id === pick.brandId)?.name ?? "" : pick.brandName;
   const set = (p: Partial<FluidPick>) => setPick((prev) => ({ ...prev, ...p }));
-  const note = existing ? priceNote(parsePriceAdvice(existing.price_advice)) : null;
+  const note = existing ? fluidNote(existing) ?? priceNote(parsePriceAdvice(existing.price_advice)) : null;
 
   async function save(): Promise<void> {
     const priceGhs = parseInt(price, 10);
@@ -105,7 +114,8 @@ export default function AddEditFluidListingScreen(): React.JSX.Element {
 
   const select = (label: string, value: string, placeholder: string, which: Exclude<Picker, null>, disabled = false) => (
     <FormField label={label}>
-      <SelectButton value={loading ? "" : value} placeholder={loading ? LOADING : placeholder} onPress={() => setPicker(which)} disabled={loading || disabled} />
+      <SelectButton value={loading ? "" : value} placeholder={loading ? (noList ? NO_LIST : LOADING) : placeholder} onPress={() => setPicker(which)} disabled={loading || disabled}
+        accessibilityLabel={label.replace(" *", "")} />
     </FormField>
   );
 
@@ -124,12 +134,12 @@ export default function AddEditFluidListingScreen(): React.JSX.Element {
           {select("Kind *", kind?.name ?? "", "Choose the kind", "kind")}
           {typedBrand ? (
             <FormField label="Brand, as written on the pack *">
-              <FormInput value={pick.brandName} onChangeText={(t) => set({ brandName: t, genuine: false })} placeholder="e.g. Fuchs" autoCapitalize="words" />
+              <FormInput value={pick.brandName} onChangeText={(t) => set({ brandName: t, genuine: false })} placeholder="e.g. Fuchs" accessibilityLabel="Brand" autoCapitalize="words" />
             </FormField>
           ) : select("Brand *", brandName, "Choose the brand", "brand", !kind)}
           {typedLine || typedBrand ? (
             <FormField label="Product name, as written on the pack *">
-              <FormInput value={pick.product} onChangeText={(t) => set({ product: t })} placeholder="e.g. Titan GT1" autoCapitalize="words" />
+              <FormInput value={pick.product} onChangeText={(t) => set({ product: t })} placeholder="e.g. Titan GT1" accessibilityLabel="Product name" autoCapitalize="words" />
             </FormField>
           ) : select("Product *", pick.product, "Choose the product", "product", !pick.brandId)}
           {typedLine || typedBrand ? (
@@ -147,7 +157,7 @@ export default function AddEditFluidListingScreen(): React.JSX.Element {
       )}
 
       <FormField label="Price *">
-        <FormInput value={price} onChangeText={(t) => setPrice(t.replace(/[^\d]/g, ""))} keyboardType="number-pad" placeholder="e.g. 350" />
+        <FormInput value={price} onChangeText={(t) => setPrice(t.replace(/[^\d]/g, ""))} keyboardType="number-pad" placeholder="e.g. 350" accessibilityLabel="Price" />
       </FormField>
 
       <FormField label={`Photos of the pack (${photos.photos.length}/${MAX_PHOTOS})`}>

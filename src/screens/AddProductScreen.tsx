@@ -5,7 +5,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ReusableText, HeightSpacer, RequestApprovalSheet } from "../../components";
 import { useThemeColors } from "../../constants/theme";
 import { useAuthStore } from "@/store/auth-store";
-import { approvedKinds, onlyKind, type ProductKind } from "@/lib/approvals";
+import { approvedKinds, autoOpenKind, type ProductKind } from "@/lib/approvals";
 import { getCachedFluidCatalog } from "@/lib/db";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
@@ -20,7 +20,13 @@ export default function AddProductScreen({ navigation }: Props): React.JSX.Eleme
   const C = useThemeColors();
   const vendor = useAuthStore((s) => s.vendor);
   const [fluidKinds, setFluidKinds] = useState<string[]>([]);
-  useEffect(() => { void getCachedFluidCatalog().then((c) => setFluidKinds(c?.kinds.map((k) => k.name) ?? [])); }, []);
+  const [fluidKindsLoaded, setFluidKindsLoaded] = useState(false);
+  useEffect(() => {
+    void getCachedFluidCatalog()
+      .then((c) => setFluidKinds(c?.kinds.map((k) => k.name) ?? []))
+      .catch(() => {})
+      .finally(() => setFluidKindsLoaded(true));
+  }, []);
   const kinds = useMemo(() => approvedKinds(vendor?.specialties ?? [], fluidKinds), [vendor?.specialties, fluidKinds]);
   const pending = vendor?.pendingSpecialties ?? [];
   const [asking, setAsking] = useState(false);
@@ -32,14 +38,14 @@ export default function AddProductScreen({ navigation }: Props): React.JSX.Eleme
     else navigation.replace("AddEditPartListing", { category: kind.partCategory! });
   }
 
-  // One kind: skip this step and open its form directly.
-  const single = onlyKind(kinds);
+  // One kind: skip this step and open its form directly, but only after the cached fluid kinds are read.
+  const single = autoOpenKind(kinds, fluidKindsLoaded);
   useEffect(() => {
     if (single) open(single);
-    // Runs once on arrival; replacing the screen ends it.
+    // Replacing the screen ends it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  if (single) return <View style={{ flex: 1, backgroundColor: C.offwhite }} />;
+  }, [single?.key]);
+  if (!fluidKindsLoaded || single) return <View style={{ flex: 1, backgroundColor: C.offwhite }} />;
 
   return (
     <ScrollView style={{ backgroundColor: C.offwhite }} contentContainerStyle={styles.root} showsVerticalScrollIndicator={false}>

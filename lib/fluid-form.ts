@@ -29,6 +29,24 @@ export const gradeOptions = (k: Kind): string[] => [...(k.gradeRequired ? [] : [
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+/**
+ * Drops picks that are no longer valid after the catalog or the vendor's approvals changed (a fresh
+ * catalog arrives, or an approval is withdrawn). Returns the same object when nothing changed.
+ * `lineTyped` says the product was typed ("Not in the list"), so it is not looked up in the catalog.
+ */
+export function reconcilePick(c: ApiFluidCatalog, approvedKinds: readonly { id: string }[], pick: FluidPick, lineTyped = false): FluidPick {
+  const kind = c.kinds.find((k) => k.id === pick.kindId);
+  if (pick.kindId && (!kind || !approvedKinds.some((k) => k.id === pick.kindId))) return emptyPick();
+  let next = pick;
+  if (pick.brandId && !c.brands.some((b) => b.id === pick.brandId)) next = chooseBrand(next, null);
+  if (next.brandId && next.product && !lineTyped && !linesFor(c, next.kindId, next.brandId).includes(next.product)) next = { ...next, product: "" };
+  if (next.grade && !kind?.grades.includes(next.grade)) next = { ...next, grade: "" };
+  if (next.colour && !(kind?.coolant && c.coolantColours.some((x) => x.value === next.colour))) next = { ...next, colour: "" };
+  if (next.mix && !(kind?.coolant && c.coolantMixes.some((x) => x.value === next.mix))) next = { ...next, mix: "" };
+  if (next.size && !c.sizes.some((s) => s.label === next.size)) next = { ...next, size: "" };
+  return next;
+}
+
 /** The vendor's own live listing of exactly this product, so a duplicate sends them to edit it instead. */
 export function findExistingFluid(rows: readonly FluidListing[], p: FluidPick): FluidListing | null {
   return rows.find((r) =>

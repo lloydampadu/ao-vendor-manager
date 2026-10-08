@@ -40,7 +40,7 @@ export function fluidListingTitle(l: TitleRow, c?: ApiFluidCatalog | null): stri
 export function fluidNote(l: Pick<FluidListing, "status" | "review_status"> & Partial<Pick<FluidListing, "hidden" | "hidden_reason" | "rejected_reason">>): string | null {
   if (l.status === "REJECTED") return `Not saved: ${l.rejected_reason || "the server refused it"}`;
   if (l.hidden === 1) return l.hidden_reason ? `Hidden by AbosseyOkai Direct: ${l.hidden_reason}` : "Hidden by AbosseyOkai Direct.";
-  if (l.status === "PENDING" || l.status === "LOCAL") return "Waiting for approval: customers can't see it yet.";
   if (l.review_status === "PRICE_CHECK") return "We're checking this price. Customers see it once it's cleared.";
+  if (l.status === "PENDING" || l.status === "LOCAL") return "Waiting for approval: customers can't see it yet.";
   return null;
 }

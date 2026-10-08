@@ -42,10 +42,11 @@ type SelectProps = {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
+  accessibilityLabel?: string;
 };
 
 /** A dropdown-looking button that opens a PickerModal. */
-export function SelectButton({ value, placeholder, onPress, loading, disabled }: SelectProps) {
+export function SelectButton({ value, placeholder, onPress, loading, disabled, accessibilityLabel }: SelectProps) {
   const C = useThemeColors();
   return (
     <TouchableOpacity
@@ -53,6 +54,7 @@ export function SelectButton({ value, placeholder, onPress, loading, disabled }:
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
     >
       <ReusableText
         text={value || placeholder}
