@@ -12,6 +12,7 @@ export const LIGHT_COLORS = {
   white:      "#FFFFFF",
   black:      "#000000",
   red:        "#E63946",
+  warning:    "#B45309",
   green:      "#00C135",
   lightWhite: "#FAFAFC",
 };
@@ -27,6 +28,7 @@ export const DARK_COLORS = {
   white:      "#1C1F2E",
   black:      "#FFFFFF",
   red:        "#FF6B75",
+  warning:    "#F5A524",
   green:      "#34D399",
   lightWhite: "#161829",
 };

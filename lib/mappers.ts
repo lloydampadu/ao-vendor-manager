@@ -98,6 +98,8 @@ export function mapTyre(l: ApiTyreListing): TyreListing {
     price_ghs: l.priceGhs,
     photos: JSON.stringify(l.photos ?? []),
     in_stock: l.inStock ? 1 : 0,
+    tyre_size_id: l.tyreSizeId ?? null,
+    price_advice: l.priceAdvice ? JSON.stringify(l.priceAdvice) : null,
     updated_at: l.updatedAt,
   };
 }

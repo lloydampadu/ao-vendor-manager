@@ -95,6 +95,10 @@ export type ApiTyreListing = {
   priceGhs: number;
   photos: string[];
   inStock: boolean;
+  /** Catalog size this listing is linked to, or null/absent when unlinked. */
+  tyreSizeId?: string | null;
+  /** Only present for in-stock, New, linked listings priced above the band. */
+  priceAdvice?: { lowestGhs: number; maxGhs: number } | null;
   updatedAt: string;
 };
 
@@ -131,6 +135,13 @@ export type ApiTyreCatalogBrand = {
   brandSlug: string;
   tier: string;
   models: ApiTyreCatalogModel[];
+};
+
+export type ApiTyreSizeBrand = {
+  brandName: string;
+  brandSlug: string;
+  tier: string;
+  models: { modelId: string; modelName: string; sizeId: string }[];
 };
 
 // ─── Endpoint groups ─────────────────────────────────────────────────────────
@@ -170,6 +181,9 @@ export const lightListingsApi = {
 
 export const tyreCatalogApi = {
   get: () => api.get<{ brands: ApiTyreCatalogBrand[] }>("/tyres/catalog"),
+  /** Catalog brands and models that exist in one size. `sizeId` identifies the catalog size row. */
+  modelsForSize: (w: number, h: number, d: number) =>
+    api.get<{ brands: ApiTyreSizeBrand[] }>(`/tyres/sizes/${w}/${h}/${d}`),
 };
 
 export const vehicleApi = {
