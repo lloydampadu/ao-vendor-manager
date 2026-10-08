@@ -338,8 +338,10 @@ async function flushListingItem<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>,
     return;
   }
 
-  const photos = Array.isArray(body.photos) ? await uploadLocalPhotos(body.photos as string[]) : [];
-  const serverBody = { ...body, photos };
+  // Photos are uploaded and sent only when the op carries them (a stock toggle sends inStock alone).
+  const hasPhotos = Array.isArray(body.photos);
+  const photos = hasPhotos ? await uploadLocalPhotos(body.photos as string[]) : [];
+  const serverBody = hasPhotos ? { ...body, photos } : body;
 
   if (item.op === "create") {
     let listing: TApi;

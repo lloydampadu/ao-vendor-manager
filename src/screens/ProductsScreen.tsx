@@ -5,7 +5,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { errorMessage, productsApi, type ApiProduct } from "@/lib/api";
 import { cacheProducts, getCachedProducts, getFluidListings, getLightListings, getTyreListings, type FluidListing, type LightListing, type TyreListing } from "@/lib/db";
-import { discardRejectedFluid, removeListing, saveFluidListing, saveLightListing, saveTyreListing } from "@/lib/listings";
+import { discardRejectedFluid, removeListing, setFluidStock, saveLightListing, saveTyreListing } from "@/lib/listings";
 import { fluidListingTitle, fluidNote } from "@/lib/fluid-catalog";
 import { parseJson } from "@/lib/assignment-status";
 import { productSections, type ProductItem } from "@/lib/products";
@@ -86,9 +86,8 @@ export default function ProductsScreen(): React.JSX.Element {
       void startSync();
     } else if (item.kind === "fluid") {
       if (item.row.status === "REJECTED") return;
-      const next: FluidListing = { ...item.row, in_stock: item.row.in_stock ? 0 : 1, updated_at: new Date().toISOString() };
+      const next = await setFluidStock(item.row, !item.row.in_stock);
       fluids.setData((prev) => prev.map((l) => (l.id === next.id ? next : l)));
-      await saveFluidListing(next, false);
       void startSync();
     } else {
       const p = item.row;

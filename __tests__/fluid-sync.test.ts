@@ -66,6 +66,13 @@ describe("pushPendingFluidListings", () => {
     expect(db.markListingOpSynced).toHaveBeenCalledWith("fluid", "create-local-1");
   });
 
+  it("sends a stock toggle as inStock alone: no photo upload, no price", async () => {
+    queueOf({ id: "update-srv-1", op: "update", listing_id: "srv-1", synced: 0, error: null, created_at: "t", payload: JSON.stringify({ server_id: "srv-1", inStock: false }) });
+    update.mockResolvedValue({});
+    await pushPendingFluidListings();
+    expect(update).toHaveBeenCalledWith("srv-1", { inStock: false });
+  });
+
   it("links to the existing listing on 409 ALREADY_LISTED instead of looping", async () => {
     queueOf(createOp, laterUpdate);
     create.mockRejectedValue(new ApiError("You already list this.", 409, { code: "ALREADY_LISTED", listingId: "srv-9" }));
@@ -84,7 +91,7 @@ describe("pushPendingFluidListings", () => {
     expect(create).toHaveBeenCalledTimes(1);
     expect(update.mock.calls).toEqual([
       ["srv-9", { priceGhs: 300, photos: ["https://cdn/a.jpg"], inStock: true }],
-      ["srv-9", { priceGhs: 280, photos: [] }],
+      ["srv-9", { priceGhs: 280 }],
     ]);
     expect(db.markFluidRejected).not.toHaveBeenCalled();
   });

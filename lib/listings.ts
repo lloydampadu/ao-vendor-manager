@@ -58,6 +58,11 @@ export function fluidPayload(l: FluidListing): Record<string, unknown> {
   };
 }
 
+/** An update only ever changes price, photos and stock: the product is fixed once listed. */
+export function fluidUpdatePayload(l: FluidListing): Record<string, unknown> {
+  return { server_id: l.server_id ?? null, priceGhs: l.price_ghs, photos: parseJson<string[]>(l.photos, []), inStock: l.in_stock === 1 };
+}
+
 async function queue(kind: ListingKind, op: "create" | "update" | "delete", listingId: string, payload: Record<string, unknown>): Promise<void> {
   await enqueueListingOp(kind, {
     id: opId(op, listingId), op, listing_id: listingId,
@@ -79,7 +84,19 @@ export async function saveLightListing(row: LightListing, isNew: boolean): Promi
 export async function saveFluidListing(row: FluidListing, isNew: boolean): Promise<void> {
   if (row.status === "REJECTED") throw new Error("This listing was not saved. Delete it and add it again.");
   await upsertFluidListing(row);
-  await queue("fluid", isNew ? "create" : "update", row.id, fluidPayload(row));
+  await queue("fluid", isNew ? "create" : "update", row.id, isNew ? fluidPayload(row) : fluidUpdatePayload(row));
+}
+
+/**
+ * The stock toggle sends ONLY inStock. A vendor whose Oils & fluids approval was withdrawn may still
+ * take a listing off sale, but the server refuses any PATCH that carries price or photos.
+ */
+export async function setFluidStock(row: FluidListing, inStock: boolean): Promise<FluidListing> {
+  if (row.status === "REJECTED") throw new Error("This listing was not saved. Delete it and add it again.");
+  const next: FluidListing = { ...row, in_stock: inStock ? 1 : 0, updated_at: new Date().toISOString() };
+  await upsertFluidListing(next);
+  await queue("fluid", "update", row.id, { server_id: row.server_id ?? null, inStock });
+  return next;
 }
 
 /** Deleting a REJECTED local row (the server never had it) only removes it here: no queued op, no server call. */

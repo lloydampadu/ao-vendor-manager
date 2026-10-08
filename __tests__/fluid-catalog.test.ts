@@ -16,8 +16,8 @@ const pick: FluidPick = { kindId: "k-oil", brandId: "b-total", brandName: "", pr
 
 describe("fluidNote order", () => {
   it("shows the price check before waiting for approval, and hidden before both", () => {
-    expect(fluidNote({ status: "PENDING", review_status: "PRICE_CHECK" })).toBe("We're checking this price. Customers see it once it's cleared.");
-    expect(fluidNote({ status: "LOCAL", review_status: "PRICE_CHECK" })).toBe("We're checking this price. Customers see it once it's cleared.");
+    expect(fluidNote({ status: "PENDING", review_status: "PRICE_CHECK" })).toBe("Price being checked by AbosseyOkai Direct. Customers can't see it yet.");
+    expect(fluidNote({ status: "LOCAL", review_status: "PRICE_CHECK" })).toBe("Price being checked by AbosseyOkai Direct. Customers can't see it yet.");
     expect(fluidNote({ status: "PENDING", review_status: "PRICE_CHECK", hidden: 1, hidden_reason: "x" })).toBe("Hidden by AbosseyOkai Direct: x");
   });
 });
@@ -41,7 +41,8 @@ describe("fluid catalog helpers", () => {
     expect(fluidListingTitle({ brand: "Prestone", product: "Antifreeze", grade: "", coolant_colour: "red", coolant_mix: "ready-mixed", size_label: "1 gal" }, catalog))
       .toBe("Prestone Antifreeze · Red / pink · Ready-mixed · 1 gal");
     expect(fluidNote({ status: "PENDING", review_status: "OK" })).toBe("Waiting for approval: customers can't see it yet.");
-    expect(fluidNote({ status: "APPROVED", review_status: "PRICE_CHECK" })).toBe("We're checking this price. Customers see it once it's cleared.");
+    expect(fluidNote({ status: "LOCAL", review_status: "OK" })).toBe("Not sent yet. It will send when you're online.");
+    expect(fluidNote({ status: "APPROVED", review_status: "PRICE_CHECK" })).toBe("Price being checked by AbosseyOkai Direct. Customers can't see it yet.");
     expect(fluidNote({ status: "APPROVED", review_status: "OK" })).toBeNull();
     expect(fluidNote({ status: "APPROVED", review_status: "OK", hidden: 1, hidden_reason: "Not genuine" })).toBe("Hidden by AbosseyOkai Direct: Not genuine");
     expect(fluidNote({ status: "APPROVED", review_status: "OK", hidden: 1, hidden_reason: null })).toBe("Hidden by AbosseyOkai Direct.");
