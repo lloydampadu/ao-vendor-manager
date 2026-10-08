@@ -108,8 +108,8 @@ export type ApiFluidListing = {
   id: string; fluidProductId: string; priceGhs: number; photos: string[]; inStock: boolean; updatedAt: string;
   reviewStatus: "OK" | "PRICE_CHECK";
   priceAdvice?: { lowestGhs: number; maxGhs: number } | null;
-  /** Taken down by AbosseyOkai Direct; the reason is for the vendor. Not stored locally yet. */
-  hidden?: boolean; hiddenReason?: string | null;
+  /** Taken down by AbosseyOkai Direct; the reason is for the vendor. */
+  hidden: boolean; hiddenReason: string | null;
   product: { kindId: string; kind: string; brandId: string; brand: string; name: string; grade: string | null;
     coolantColour: string | null; coolantMix: string | null; sizeLabel: string; title: string; status: "APPROVED" | "PENDING" };
 };

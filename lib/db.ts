@@ -109,6 +109,8 @@ export type FluidListing = {
   size_label: string;
   status: string; // "APPROVED" | "PENDING" (server) | "LOCAL" (not sent yet)
   review_status: string; // "OK" | "PRICE_CHECK"
+  hidden: number; // 1 = taken down by AbosseyOkai Direct
+  hidden_reason: string | null;
   price_ghs: number;
   photos: string; // JSON string[]
   in_stock: number;
@@ -297,6 +299,8 @@ const MIGRATIONS: string[] = [
     size_label TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'LOCAL',
     review_status TEXT NOT NULL DEFAULT 'OK',
+    hidden INTEGER NOT NULL DEFAULT 0,
+    hidden_reason TEXT,
     price_ghs INTEGER NOT NULL,
     photos TEXT NOT NULL DEFAULT '[]',
     in_stock INTEGER NOT NULL DEFAULT 1,
@@ -710,7 +714,7 @@ export async function upsertLightListing(l: LightListing): Promise<void> {
 }
 
 const FLUID_COLS = ["id", "server_id", "fluid_product_id", "kind_id", "kind", "brand_id", "brand", "product", "grade", "coolant_colour", "coolant_mix",
-  "size_label", "status", "review_status", "price_ghs", "photos", "in_stock", "price_advice", "updated_at"] as const;
+  "size_label", "status", "review_status", "hidden", "hidden_reason", "price_ghs", "photos", "in_stock", "price_advice", "updated_at"] as const;
 
 export async function upsertFluidListing(l: FluidListing): Promise<void> {
   const db = await getDb();

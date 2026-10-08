@@ -35,5 +35,7 @@ describe("fluid catalog helpers", () => {
     expect(fluidNote({ status: "PENDING", review_status: "OK" })).toBe("Waiting for approval: customers can't see it yet.");
     expect(fluidNote({ status: "APPROVED", review_status: "PRICE_CHECK" })).toBe("We're checking this price. Customers see it once it's cleared.");
     expect(fluidNote({ status: "APPROVED", review_status: "OK" })).toBeNull();
+    expect(fluidNote({ status: "APPROVED", review_status: "OK", hidden: 1, hidden_reason: "Not genuine" })).toBe("Hidden by AbosseyOkai Direct: Not genuine");
+    expect(fluidNote({ status: "APPROVED", review_status: "OK", hidden: 1, hidden_reason: null })).toBe("Hidden by AbosseyOkai Direct.");
   });
 });

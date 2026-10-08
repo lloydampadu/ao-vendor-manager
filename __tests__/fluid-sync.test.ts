@@ -49,7 +49,7 @@ describe("pushPendingFluidListings", () => {
     create.mockResolvedValue({
       pending: false,
       listing: {
-        id: "srv-1", fluidProductId: "p1", priceGhs: 300, photos: ["https://cdn/a.jpg"], inStock: true, updatedAt: "t", reviewStatus: "OK",
+        id: "srv-1", fluidProductId: "p1", priceGhs: 300, photos: ["https://cdn/a.jpg"], inStock: true, updatedAt: "t", reviewStatus: "OK", hidden: false, hiddenReason: null,
         product: { kindId: "k", kind: "Engine oil", brandId: "b", brand: "Total", name: "Quartz 9000", grade: "5W-40", coolantColour: null, coolantMix: null, sizeLabel: "4 L", title: "t", status: "APPROVED" },
       },
     });
@@ -68,6 +68,10 @@ describe("pushPendingFluidListings", () => {
     expect(db.deleteListing).toHaveBeenCalledWith("fluid", "local-1");
     // The edit queued behind the create now targets the real listing.
     expect(db.enqueueListingOp).toHaveBeenCalledWith("fluid", expect.objectContaining({ listing_id: "srv-9", payload: expect.stringContaining('"server_id":"srv-9"') }));
+    // The vendor's new price, photos and stock land on the existing listing; the product is untouched.
+    const patch = (db.enqueueListingOp as jest.Mock).mock.calls.map((c) => c[1]).find((q) => q.id === "create-local-1-existing");
+    expect(patch).toMatchObject({ op: "update", listing_id: "srv-9", synced: 0 });
+    expect(JSON.parse(patch.payload)).toEqual({ server_id: "srv-9", priceGhs: 300, photos: ["https://cdn/a.jpg"], inStock: true });
     expect(db.markListingOpSynced).toHaveBeenCalledWith("fluid", "create-local-1");
     expect(db.markListingOpError).not.toHaveBeenCalled();
   });

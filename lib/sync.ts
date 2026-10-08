@@ -349,6 +349,12 @@ async function flushListingItem<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>,
       if (!existing) throw err;
       await deleteListing(cfg.kind, item.listing_id);
       await rekeyQueuedOps(cfg.kind, item.id, item.listing_id, existing);
+      // Keep what the vendor just entered: price, photos and stock go onto the existing listing
+      // (never the product). Queued ahead of any edits that were waiting behind this create.
+      await enqueueListingOp(cfg.kind, {
+        id: `${item.id}-existing`, op: "update", listing_id: existing, synced: 0, error: null, created_at: item.created_at,
+        payload: JSON.stringify({ server_id: existing, priceGhs: body.priceGhs, photos, inStock: body.inStock }),
+      });
       return;
     }
     const serverId = cfg.idOf(listing);

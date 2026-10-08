@@ -27,7 +27,7 @@ describe("tyrePayload", () => {
 describe("fluidPayload", () => {
   it("sends a typed brand as brandName, a picked one as brandId, and always the genuine tick", () => {
     const base = { id: "local-1", server_id: null, fluid_product_id: null, kind_id: "k", kind: "Engine oil", brand_id: "b", brand: "Total", product: "Quartz 9000",
-      grade: "5W-40", coolant_colour: "", coolant_mix: "", size_label: "4 L", status: "LOCAL", review_status: "OK", price_ghs: 300, photos: "[]", in_stock: 1, price_advice: null, updated_at: "x" };
+      grade: "5W-40", coolant_colour: "", coolant_mix: "", size_label: "4 L", status: "LOCAL", review_status: "OK", hidden: 0, hidden_reason: null, price_ghs: 300, photos: "[]", in_stock: 1, price_advice: null, updated_at: "x" };
     expect(fluidPayload(base)).toEqual({
       server_id: null, kindId: "k", brandId: "b", productName: "Quartz 9000", grade: "5W-40", coolantColour: null, coolantMix: null, sizeLabel: "4 L",
       priceGhs: 300, photos: [], inStock: true, genuine: true,
