@@ -75,7 +75,9 @@ export async function saveLightListing(row: LightListing, isNew: boolean): Promi
   await queue("light", isNew ? "create" : "update", row.id, lightPayload(row));
 }
 
+/** A REJECTED row was refused for good: it can only be deleted (discardRejectedFluid), never saved or edited. */
 export async function saveFluidListing(row: FluidListing, isNew: boolean): Promise<void> {
+  if (row.status === "REJECTED") throw new Error("This listing was not saved. Delete it and add it again.");
   await upsertFluidListing(row);
   await queue("fluid", isNew ? "create" : "update", row.id, fluidPayload(row));
 }

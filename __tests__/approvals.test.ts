@@ -1,5 +1,5 @@
 import {
-  approvalKey, approvedKinds, approvedLampTypes, approvedTypesIn, groupOf, isApproved, needsBrandsStep, onlyKind, requestableSections,
+  approvalKey, approvedFluidKinds, approvedKinds, approvedLampTypes, approvedTypesIn, canListFluidKind, groupOf, isApproved, needsBrandsStep, OILS_FLUIDS, onlyKind, requestableSections,
 } from "@/lib/approvals";
 import { productSections } from "@/lib/products";
 import { catalogNameLine } from "@/lib/part-tiles";
@@ -108,5 +108,30 @@ describe("one Products list", () => {
   it("leaves out empty kinds", () => {
     expect(productSections([], [], [part("p1", "Body")]).map((x) => x.key)).toEqual(["Body"]);
     expect(productSections([], [], [])).toEqual([]);
+  });
+});
+
+describe("Oils & fluids approval", () => {
+  const fluidKinds = [{ id: "k1", name: "Engine oil" }, { id: "k2", name: "Brake fluid" }];
+  it("the whole family covers every kind; a single kind covers itself", () => {
+    expect(canListFluidKind([OILS_FLUIDS], "Brake fluid")).toBe(true);
+    expect(canListFluidKind(["Engine oil"], "Brake fluid")).toBe(false);
+    expect(approvedFluidKinds(["Engine oil"], fluidKinds).map((k) => k.id)).toEqual(["k1"]);
+    expect(approvedFluidKinds(["Tyres"], fluidKinds)).toEqual([]);
+  });
+  it("offers the Oils & fluids form only when something is approved", () => {
+    expect(approvedKinds([OILS_FLUIDS]).map((k) => k.form)).toEqual(["fluid"]);
+    expect(approvedKinds(["Engine oil"], ["Engine oil", "Brake fluid"]).map((k) => k.key)).toEqual(["fluids"]);
+    expect(approvedKinds(["Tyres"]).some((k) => k.form === "fluid")).toBe(false);
+  });
+  it("lets a vendor ask for the whole family or one kind", () => {
+    const s = requestableSections([], [], undefined, ["Engine oil", "Brake fluid"]).find((x) => x.title === OILS_FLUIDS);
+    expect(s?.items).toEqual([OILS_FLUIDS, "Engine oil", "Brake fluid"]);
+    expect(requestableSections([OILS_FLUIDS], [], undefined, ["Engine oil"]).some((x) => x.title === OILS_FLUIDS)).toBe(false);
+  });
+  it("groups the family under itself, and skips the brands step for tyres and oils only", () => {
+    expect(groupOf(OILS_FLUIDS)).toBe(OILS_FLUIDS);
+    expect(needsBrandsStep([OILS_FLUIDS, "Tyres"])).toBe(false);
+    expect(needsBrandsStep([OILS_FLUIDS, "Fender"])).toBe(true);
   });
 });

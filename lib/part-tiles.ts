@@ -3,7 +3,7 @@ import type { Ionicons } from "@expo/vector-icons";
 export type CategoryTile = {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  /** Key into PART_CATEGORIES; null for Tyres and Lamps, which have their own forms. */
+  /** Key into PART_CATEGORIES; null for Tyres, Lamps and Oils & fluids, which have their own forms. */
   partCategory: string | null;
   /** VendorCategory enum value stored on vendor.categories. */
   vendorCategory: string;
@@ -16,6 +16,7 @@ export const TILES: CategoryTile[] = [
   { label: "Electrical",   icon: "flash-outline",            partCategory: "Electrical",            vendorCategory: "ELECTRICAL" },
   { label: "Tyres",        icon: "ellipse-outline",          partCategory: null,                    vendorCategory: "TYRES" },
   { label: "Lamps",        icon: "bulb-outline",             partCategory: null,                    vendorCategory: "LAMPS" },
+  { label: "Oils & fluids", icon: "water-outline",           partCategory: null,                    vendorCategory: "OILS_FLUIDS" },
   { label: "Suspension",   icon: "git-branch-outline",       partCategory: "Steering & Suspension", vendorCategory: "STEERING_SUSPENSION" },
   { label: "Transmission", icon: "swap-horizontal-outline",  partCategory: "Transmission",          vendorCategory: "TRANSMISSION" },
   { label: "Interior",     icon: "grid-outline",             partCategory: "Interior",              vendorCategory: "INTERIOR" },
