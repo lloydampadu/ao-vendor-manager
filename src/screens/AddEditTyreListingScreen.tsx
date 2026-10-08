@@ -72,6 +72,8 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
   useEffect(() => {
     if (!sizeOk) { setChoices([]); setCatalogState("idle"); return; }
     let cancelled = false;
+    // Drop the previous size's tyres at once so none can be linked while the new size loads.
+    setChoices([]);
     setCatalogState("loading");
     const timer = setTimeout(() => {
       tyreCatalogApi.modelsForSize(wN, hN, dN)
@@ -124,7 +126,11 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
         photos: JSON.stringify(photos.urls),
         in_stock: inStock ? 1 : 0,
         tyre_size_id: showPickers ? sizeId : null,
-        price_advice: existing?.price_advice ?? null,
+        // Advice describes the old price/state; keep it only if nothing it depends on changed.
+        price_advice:
+          existing && existing.price_ghs === v.priceGhs && existing.condition === condition
+            && (existing.in_stock === 1) === inStock && (existing.tyre_size_id ?? null) === (showPickers ? sizeId : null)
+            ? existing.price_advice : null,
         updated_at: new Date().toISOString(),
       };
       await saveTyreListing(row, !existing);
@@ -148,10 +154,10 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
       {showPickers ? (
         <>
           <FormField label="Brand *">
-            <SelectButton value={brand} placeholder={sizeOk ? "Select brand" : "Enter the size first"} onPress={() => setPicker("brand")} loading={catalogState === "loading"} disabled={!sizeOk} />
+            <SelectButton value={catalogState === "loading" ? "Loading…" : brand} placeholder={sizeOk ? "Select brand" : "Enter the size first"} onPress={() => setPicker("brand")} loading={catalogState === "loading"} disabled={!sizeOk || catalogState === "loading"} />
           </FormField>
           <FormField label="Model *">
-            <SelectButton value={model} placeholder="Select model" onPress={() => setPicker("model")} disabled={!sizeOk || !brand} />
+            <SelectButton value={catalogState === "loading" ? "Loading…" : model} placeholder="Select model" onPress={() => setPicker("model")} disabled={!sizeOk || !brand || catalogState === "loading"} />
           </FormField>
           <TouchableOpacity onPress={() => { setManual(true); setSizeId(null); setBrand(""); setModel(""); }} style={styles.linkRow} accessibilityRole="button">
             <ReusableText text="Not in the list" family="medium" size={13} color={C.primary} />
