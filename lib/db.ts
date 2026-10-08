@@ -111,6 +111,7 @@ export type FluidListing = {
   review_status: string; // "OK" | "PRICE_CHECK"
   hidden: number; // 1 = taken down by AbosseyOkai Direct
   hidden_reason: string | null;
+  rejected_reason: string | null; // set (with status "REJECTED") when the server refused the create for good
   price_ghs: number;
   photos: string; // JSON string[]
   in_stock: number;
@@ -301,6 +302,7 @@ const MIGRATIONS: string[] = [
     review_status TEXT NOT NULL DEFAULT 'OK',
     hidden INTEGER NOT NULL DEFAULT 0,
     hidden_reason TEXT,
+    rejected_reason TEXT,
     price_ghs INTEGER NOT NULL,
     photos TEXT NOT NULL DEFAULT '[]',
     in_stock INTEGER NOT NULL DEFAULT 1,
@@ -714,7 +716,7 @@ export async function upsertLightListing(l: LightListing): Promise<void> {
 }
 
 const FLUID_COLS = ["id", "server_id", "fluid_product_id", "kind_id", "kind", "brand_id", "brand", "product", "grade", "coolant_colour", "coolant_mix",
-  "size_label", "status", "review_status", "hidden", "hidden_reason", "price_ghs", "photos", "in_stock", "price_advice", "updated_at"] as const;
+  "size_label", "status", "review_status", "hidden", "hidden_reason", "rejected_reason", "price_ghs", "photos", "in_stock", "price_advice", "updated_at"] as const;
 
 export async function upsertFluidListing(l: FluidListing): Promise<void> {
   const db = await getDb();
@@ -723,6 +725,12 @@ export async function upsertFluidListing(l: FluidListing): Promise<void> {
      ON CONFLICT(id) DO UPDATE SET ${FLUID_COLS.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ")}`,
     FLUID_COLS.map((c) => l[c]),
   );
+}
+
+/** The server refused this never-synced listing for good: keep the row, say why, let the vendor delete it. */
+export async function markFluidRejected(id: string, reason: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE fluid_listings SET status = 'REJECTED', rejected_reason = ? WHERE id = ? AND server_id IS NULL`, [reason, id]);
 }
 
 export async function getFluidListings(): Promise<FluidListing[]> {

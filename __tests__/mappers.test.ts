@@ -115,7 +115,7 @@ describe("mapFluid", () => {
     expect(row).toEqual({
       id: "f1", server_id: "f1", fluid_product_id: "p1", kind_id: "k", kind: "Engine oil", brand_id: "b", brand: "Total", product: "Quartz 9000",
       grade: "5W-40", coolant_colour: "", coolant_mix: "", size_label: "4 L", status: "APPROVED", review_status: "PRICE_CHECK",
-      hidden: 1, hidden_reason: "Not genuine",
+      hidden: 1, hidden_reason: "Not genuine", rejected_reason: null,
       price_ghs: 300, photos: '["https://p/1.jpg"]', in_stock: 1, price_advice: '{"lowestGhs":250,"maxGhs":275}', updated_at: "2026-10-08T00:00:00Z",
     });
   });

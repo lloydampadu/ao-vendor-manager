@@ -128,7 +128,7 @@ export function mapFluid(l: ApiFluidListing): FluidListing {
     kind_id: l.product.kindId, kind: l.product.kind, brand_id: l.product.brandId, brand: l.product.brand, product: l.product.name,
     grade: l.product.grade ?? "", coolant_colour: l.product.coolantColour ?? "", coolant_mix: l.product.coolantMix ?? "",
     size_label: l.product.sizeLabel, status: l.product.status, review_status: l.reviewStatus,
-    hidden: l.hidden ? 1 : 0, hidden_reason: l.hidden ? l.hiddenReason ?? null : null,
+    hidden: l.hidden ? 1 : 0, hidden_reason: l.hidden ? l.hiddenReason ?? null : null, rejected_reason: null,
     price_ghs: l.priceGhs, photos: JSON.stringify(l.photos ?? []), in_stock: l.inStock ? 1 : 0,
     price_advice: l.priceAdvice ? JSON.stringify(l.priceAdvice) : null, updated_at: l.updatedAt,
   };

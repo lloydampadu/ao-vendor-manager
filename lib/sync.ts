@@ -25,6 +25,7 @@ import {
   getListingIdsWithPendingOps,
   getPendingDeclines,
   getPendingListingOps,
+  markFluidRejected,
   getPendingQuotes,
   getPendingStages,
   markDeclineError,
@@ -287,6 +288,8 @@ type ListingFlushConfig<TRow, TApi> = {
   idOf: (l: TApi) => string;
   /** The server's id for a listing this vendor already has, when a create was refused as a duplicate. */
   existingIdOf?: (err: unknown) => string | null;
+  /** A create the server refused for good: keep the local row, marked with the reason. */
+  rejectCreate?: (localId: string, reason: string) => Promise<void>;
 };
 
 const TYRE_FLUSH: ListingFlushConfig<TyreListing, ApiTyreListing> = {
@@ -316,6 +319,7 @@ const FLUID_FLUSH: ListingFlushConfig<FluidListing, ApiFluidListing> = {
   remove: fluidListingsApi.delete,
   toRow: mapFluid,
   upsert: upsertFluidListing,
+  rejectCreate: markFluidRejected,
   idOf: (l) => l.id,
   existingIdOf: (err) => {
     const body = isApiError(err) && err.status === 409 ? (err.body as { code?: unknown; listingId?: unknown } | undefined) : undefined;
@@ -407,6 +411,7 @@ async function pushListingQueue<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>)
     } catch (err) {
       if (failureAction(err) === "drop") {
         await markListingOpSynced(cfg.kind, item.id, describe(err));
+        if (item.op === "create") await cfg.rejectCreate?.(item.listing_id, describe(err));
       } else {
         await markListingOpError(cfg.kind, item.id, describe(err));
         throw err;

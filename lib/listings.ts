@@ -80,6 +80,11 @@ export async function saveFluidListing(row: FluidListing, isNew: boolean): Promi
   await queue("fluid", isNew ? "create" : "update", row.id, fluidPayload(row));
 }
 
+/** Deleting a REJECTED local row (the server never had it) only removes it here: no queued op, no server call. */
+export async function discardRejectedFluid(id: string): Promise<void> {
+  await deleteListing("fluid", id);
+}
+
 export async function removeListing(kind: ListingKind, id: string, serverId: string | null): Promise<void> {
   await deleteListing(kind, id);
   await queue(kind, "delete", id, { server_id: serverId });

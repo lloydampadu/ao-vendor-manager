@@ -2,6 +2,7 @@
 // failure paths (already listed, not approved) must settle the op instead of looping or wedging.
 jest.mock("../lib/db", () => ({
   deleteListing: jest.fn(),
+  markFluidRejected: jest.fn(),
   enqueueListingOp: jest.fn(),
   getPendingListingOps: jest.fn(),
   markListingOpError: jest.fn(),
@@ -27,6 +28,7 @@ import { pushPendingFluidListings } from "../lib/sync";
 const mocked = <T extends (...a: never[]) => unknown>(f: T) => f as unknown as jest.Mock;
 const create = mocked(fluidListingsApi.create);
 const pending = mocked(db.getPendingListingOps);
+const update = mocked(fluidListingsApi.update);
 
 const createOp = {
   id: "create-local-1", op: "create", listing_id: "local-1", synced: 0, error: null, created_at: "t",
@@ -35,10 +37,14 @@ const createOp = {
 const laterUpdate = { id: "update-local-1", op: "update", listing_id: "local-1", synced: 0, error: null, created_at: "t2", payload: JSON.stringify({ server_id: null, priceGhs: 280 }) };
 
 /** The queue as the DB would report it: unsynced items only, shrinking as ops are marked synced. */
-function queueOf(...items: unknown[]) {
+function queueOf(...initial: unknown[]) {
+  type Item = { id: string; created_at: string };
+  const all = [...(initial as Item[])];
   const done = new Set<string>();
   mocked(db.markListingOpSynced).mockImplementation(async (_k: string, id: string) => { done.add(id); });
-  pending.mockImplementation(async () => (items as { id: string }[]).filter((i) => !done.has(i.id)));
+  // Ops enqueued during a flush join the queue, as they would in SQLite (oldest first).
+  mocked(db.enqueueListingOp).mockImplementation(async (_k: string, q: Item) => { all.push(q); });
+  pending.mockImplementation(async () => all.filter((i) => !done.has(i.id)).sort((a, b) => a.created_at.localeCompare(b.created_at)));
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -74,6 +80,13 @@ describe("pushPendingFluidListings", () => {
     expect(JSON.parse(patch.payload)).toEqual({ server_id: "srv-9", priceGhs: 300, photos: ["https://cdn/a.jpg"], inStock: true });
     expect(db.markListingOpSynced).toHaveBeenCalledWith("fluid", "create-local-1");
     expect(db.markListingOpError).not.toHaveBeenCalled();
+    // Same pass: the vendor's input goes first, then the edit that was waiting behind the create.
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls).toEqual([
+      ["srv-9", { priceGhs: 300, photos: ["https://cdn/a.jpg"], inStock: true }],
+      ["srv-9", { priceGhs: 280, photos: [] }],
+    ]);
+    expect(db.markFluidRejected).not.toHaveBeenCalled();
   });
 
   it("marks the op failed with the reason on 403 NOT_APPROVED and keeps flushing", async () => {
@@ -83,6 +96,28 @@ describe("pushPendingFluidListings", () => {
     await expect(pushPendingFluidListings()).resolves.toBeUndefined();
     expect(create).toHaveBeenCalledTimes(1);
     expect(db.markListingOpSynced).toHaveBeenCalledWith("fluid", "create-local-1", msg);
+    // The row is kept and marked with the reason, not orphaned as "waiting for approval".
+    expect(db.markFluidRejected).toHaveBeenCalledWith("local-1", msg);
+    expect(db.deleteListing).not.toHaveBeenCalled();
+  });
+
+  it("marks the row rejected for a plain 400 and a 409 that is not ALREADY_LISTED", async () => {
+    queueOf(createOp);
+    create.mockRejectedValue(new ApiError("Choose a grade from the list.", 400));
+    await pushPendingFluidListings();
+    expect(db.markFluidRejected).toHaveBeenLastCalledWith("local-1", "Choose a grade from the list.");
+    create.mockRejectedValue(new ApiError("Conflict", 409, { code: "OTHER" }));
+    queueOf(createOp);
+    await pushPendingFluidListings();
+    expect(db.markFluidRejected).toHaveBeenLastCalledWith("local-1", "Conflict");
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not mark the row rejected when offline", async () => {
+    queueOf(createOp);
+    create.mockRejectedValue(new ApiError("Network request failed", 0));
+    await expect(pushPendingFluidListings()).rejects.toBeDefined();
+    expect(db.markFluidRejected).not.toHaveBeenCalled();
   });
 
   it("leaves the op queued and stops when offline", async () => {

@@ -37,5 +37,6 @@ describe("fluid catalog helpers", () => {
     expect(fluidNote({ status: "APPROVED", review_status: "OK" })).toBeNull();
     expect(fluidNote({ status: "APPROVED", review_status: "OK", hidden: 1, hidden_reason: "Not genuine" })).toBe("Hidden by AbosseyOkai Direct: Not genuine");
     expect(fluidNote({ status: "APPROVED", review_status: "OK", hidden: 1, hidden_reason: null })).toBe("Hidden by AbosseyOkai Direct.");
+    expect(fluidNote({ status: "REJECTED", review_status: "OK", hidden: 1, hidden_reason: "x", rejected_reason: "Choose a grade from the list." })).toBe("Not saved: Choose a grade from the list.");
   });
 });
