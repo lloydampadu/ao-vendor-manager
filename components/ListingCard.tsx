@@ -24,10 +24,12 @@ type Props = {
   onDelete: () => void;
   onToggleStock: () => void;
   titleSize?: number;
+  /** Small warning line under the price (e.g. the tyre price note). */
+  note?: string | null;
 };
 
 /** One tile in a 2-up listing grid (tyres, lights, generic parts). */
-export function ListingCard({ title, subtitle, priceGhs, condition, photo, inStock, placeholderIcon, onPress, onDelete, onToggleStock, titleSize = 14 }: Props) {
+export function ListingCard({ title, subtitle, priceGhs, condition, photo, inStock, placeholderIcon, onPress, onDelete, onToggleStock, titleSize = 14, note }: Props) {
   const C = useThemeColors();
   const tag = CONDITION_TAG[condition] ?? { label: condition, color: C.gray2 };
   return (
@@ -53,6 +55,7 @@ export function ListingCard({ title, subtitle, priceGhs, condition, photo, inSto
           {subtitle ? (<><HeightSpacer height={2} /><ReusableText text={subtitle} family="regular" size={11} color={C.gray2} numberOfLines={1} /></>) : null}
           <HeightSpacer height={4} />
           <ReusableText text={`GH₵ ${priceGhs.toLocaleString()}`} family="bold" size={14} color={C.primary} />
+          {note ? (<><HeightSpacer height={2} /><ReusableText text={note} family="regular" size={10} color={C.warning} /></>) : null}
         </View>
       </TouchableOpacity>
 

@@ -15,6 +15,7 @@ import { ReusableText, ProductsSkeletonList, EmptyState, RequestApprovalSheet } 
 import { ListingCard, GridSectionHeader, gridStyles } from "../../components/ListingCard";
 import { useThemeColors } from "../../constants/theme";
 import { tyreSizeLabel } from "@/lib/tyre-sizes";
+import { parsePriceAdvice, priceNote } from "@/lib/tyre-catalog";
 import type { ProductsStackParamList } from "../navigation/ProductsStackNavigator";
 
 /**
@@ -197,7 +198,8 @@ function cardOf(item: ProductItem) {
   if (item.kind === "tyre") {
     const l = item.row;
     return { title: tyreSizeLabel(l), subtitle: [l.brand, l.model].filter(Boolean).join(" · "), titleSize: 19, priceGhs: l.price_ghs, condition: l.condition,
-      photo: parseJson<string[]>(l.photos, [])[0], inStock: l.in_stock === 1, placeholderIcon: "car-sport-outline" as const };
+      photo: parseJson<string[]>(l.photos, [])[0], inStock: l.in_stock === 1, placeholderIcon: "car-sport-outline" as const,
+      note: priceNote(parsePriceAdvice(l.price_advice)) };
   }
   if (item.kind === "lamp") {
     const l = item.row;

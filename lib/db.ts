@@ -72,6 +72,8 @@ export type TyreListing = {
   price_ghs: number;
   photos: string; // JSON string[]
   in_stock: number; // 0 or 1
+  tyre_size_id: string | null; // catalog size; null = free-text, an admin links it later
+  price_advice: string | null; // JSON { lowestGhs, maxGhs } from the server, or null
   updated_at: string;
 };
 
@@ -244,6 +246,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN payout_amount_ghs INTEGER;
   ALTER TABLE orders ADD COLUMN payout_at TEXT;
   ALTER TABLE orders ADD COLUMN payout_ref TEXT;
+  `,
+  // v4 — tyre listings link to a catalog size and carry the server's price advice (JSON or null).
+  `
+  ALTER TABLE tyre_listings ADD COLUMN tyre_size_id TEXT;
+  ALTER TABLE tyre_listings ADD COLUMN price_advice TEXT;
   `,
 ];
 
@@ -608,13 +615,14 @@ const LISTING_TABLES: Record<ListingKind, ListingTables> = {
 export async function upsertTyreListing(t: TyreListing): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO tyre_listings (id, server_id, width, height, diameter, brand, model, condition, price_ghs, photos, in_stock, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO tyre_listings (id, server_id, width, height, diameter, brand, model, condition, price_ghs, photos, in_stock, tyre_size_id, price_advice, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        server_id = excluded.server_id, width = excluded.width, height = excluded.height, diameter = excluded.diameter,
        brand = excluded.brand, model = excluded.model, condition = excluded.condition, price_ghs = excluded.price_ghs,
-       photos = excluded.photos, in_stock = excluded.in_stock, updated_at = excluded.updated_at`,
-    [t.id, t.server_id, t.width, t.height, t.diameter, t.brand, t.model, t.condition, t.price_ghs, t.photos, t.in_stock, t.updated_at],
+       photos = excluded.photos, in_stock = excluded.in_stock, tyre_size_id = excluded.tyre_size_id,
+       price_advice = excluded.price_advice, updated_at = excluded.updated_at`,
+    [t.id, t.server_id, t.width, t.height, t.diameter, t.brand, t.model, t.condition, t.price_ghs, t.photos, t.in_stock, t.tyre_size_id, t.price_advice, t.updated_at],
   );
 }
 

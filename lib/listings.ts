@@ -27,6 +27,9 @@ export function tyrePayload(l: TyreListing): Record<string, unknown> {
     width: l.width, height: l.height, diameter: l.diameter,
     brand: l.brand, model: l.model, condition: l.condition,
     priceGhs: l.price_ghs, photos: parseJson<string[]>(l.photos, []), inStock: l.in_stock === 1,
+    // Sent only when linked: the server then takes brand/model from the catalog. Omitted
+    // (not null) otherwise, so an unchanged free-text edit never unlinks by accident.
+    ...(l.tyre_size_id ? { tyreSizeId: l.tyre_size_id } : {}),
   };
 }
 

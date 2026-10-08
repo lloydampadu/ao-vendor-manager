@@ -52,6 +52,16 @@ describe("listing mappers", () => {
     expect(row).toMatchObject({ id: "t1", server_id: "t1", brand: "", model: "", in_stock: 1, photos: '["https://x/1.jpg"]' });
   });
 
+  it("maps the catalog link and price advice on tyres", () => {
+    const base = { id: "t1", width: 205, height: 55, diameter: 16, brand: "Michelin", model: "Primacy 4", condition: "NEW", priceGhs: 850, photos: [], inStock: true, updatedAt: "2026-10-01T00:00:00Z" };
+    const linked = mapTyre({ ...base, tyreSizeId: "s1", priceAdvice: { lowestGhs: 300, maxGhs: 330 } });
+    expect(linked.tyre_size_id).toBe("s1");
+    expect(JSON.parse(linked.price_advice as string)).toEqual({ lowestGhs: 300, maxGhs: 330 });
+    const unlinked = mapTyre(base);
+    expect(unlinked.tyre_size_id).toBeNull();
+    expect(unlinked.price_advice).toBeNull();
+  });
+
   it("maps lights and keeps the server id as the local key", () => {
     const row = mapLight({ id: "l1", lightType: "Headlight Assembly", side: "Left", make: "Toyota", model: null, year: null, condition: "USED", priceGhs: 300, photos: [], inStock: false, updatedAt: "2026-10-01T00:00:00Z" });
     expect(row).toMatchObject({ id: "l1", server_id: "l1", model: "", year: "", in_stock: 0 });
