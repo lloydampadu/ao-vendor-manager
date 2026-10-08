@@ -1,8 +1,19 @@
-import { api, lightListingsApi, tyreCatalogApi, tyreListingsApi, type ApiLightListing, type ApiTyreListing } from "./api";
+import {
+  api,
+  fluidCatalogApi,
+  fluidListingsApi,
+  lightListingsApi,
+  tyreCatalogApi,
+  tyreListingsApi,
+  type ApiFluidListing,
+  type ApiLightListing,
+  type ApiTyreListing,
+} from "./api";
 import { ApiError, failureAction, isApiError } from "./api-error";
 import { getToken } from "./auth";
 import {
   applyLocalStage,
+  cacheFluidCatalog,
   cacheTyreCatalog,
   deleteAssignment,
   deleteDuplicateListings,
@@ -29,17 +40,19 @@ import {
   pruneOrders,
   upsertAssignment,
   upsertAssignments,
+  upsertFluidListing,
   upsertLightListing,
   upsertOrders,
   upsertTyreListing,
   type Assignment,
+  type FluidListing,
   type LightListing,
   type ListingKind,
   type ListingQueueItem,
   type TyreListing,
 } from "./db";
 import { createLogger } from "./logger";
-import { mapAssignment, mapLight, mapOrder, mapTyre, mergeAssignment, type ApiAssignment, type ApiOrder } from "./mappers";
+import { mapAssignment, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, type ApiAssignment, type ApiOrder } from "./mappers";
 import { uploadLocalPhotos } from "./upload";
 
 const log = createLogger("sync");
@@ -164,6 +177,17 @@ export async function pullLightListings(): Promise<void> {
   await applyLightListings(await lightListingsApi.getAll());
 }
 
+export async function applyFluidListings({ listings }: { listings: ApiFluidListing[] }): Promise<void> {
+  const pending = await getListingIdsWithPendingOps("fluid");
+  for (const l of listings) {
+    if (pending.has(l.id)) continue;
+    await upsertFluidListing(mapFluid(l));
+    await deleteDuplicateListings("fluid", l.id, l.id);
+  }
+  await pruneListings("fluid", new Set(listings.map((l) => l.id)), pending);
+  log.debug("applyFluidListings", { count: listings.length });
+}
+
 export async function pullTyreCatalog(): Promise<void> {
   const { brands } = await tyreCatalogApi.get();
   await cacheTyreCatalog(brands);
@@ -261,6 +285,8 @@ type ListingFlushConfig<TRow, TApi> = {
   toRow: (l: TApi) => TRow;
   upsert: (row: TRow) => Promise<void>;
   idOf: (l: TApi) => string;
+  /** The server's id for a listing this vendor already has, when a create was refused as a duplicate. */
+  existingIdOf?: (err: unknown) => string | null;
 };
 
 const TYRE_FLUSH: ListingFlushConfig<TyreListing, ApiTyreListing> = {
@@ -283,6 +309,20 @@ const LIGHT_FLUSH: ListingFlushConfig<LightListing, ApiLightListing> = {
   idOf: (l) => l.id,
 };
 
+const FLUID_FLUSH: ListingFlushConfig<FluidListing, ApiFluidListing> = {
+  kind: "fluid",
+  create: fluidListingsApi.create,
+  update: fluidListingsApi.update,
+  remove: fluidListingsApi.delete,
+  toRow: mapFluid,
+  upsert: upsertFluidListing,
+  idOf: (l) => l.id,
+  existingIdOf: (err) => {
+    const body = isApiError(err) && err.status === 409 ? (err.body as { code?: unknown; listingId?: unknown } | undefined) : undefined;
+    return body?.code === "ALREADY_LISTED" && typeof body.listingId === "string" ? body.listingId : null;
+  },
+};
+
 async function flushListingItem<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>, item: ListingQueueItem): Promise<void> {
   const payload = JSON.parse(item.payload) as Record<string, unknown> & { server_id?: string | null; photos?: string[] };
   const { server_id, ...body } = payload;
@@ -298,7 +338,19 @@ async function flushListingItem<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>,
   const serverBody = { ...body, photos };
 
   if (item.op === "create") {
-    const { listing } = await cfg.create(serverBody);
+    let listing: TApi;
+    try {
+      ({ listing } = await cfg.create(serverBody));
+    } catch (err) {
+      // Already listed (another phone, or a create whose reply was lost): adopt the existing
+      // listing. Dropping the local row lets the pull that follows bring in the server's copy,
+      // and edits queued behind this create now target it.
+      const existing = cfg.existingIdOf?.(err);
+      if (!existing) throw err;
+      await deleteListing(cfg.kind, item.listing_id);
+      await rekeyQueuedOps(cfg.kind, item.id, item.listing_id, existing);
+      return;
+    }
     const serverId = cfg.idOf(listing);
     // Re-key the local row from the temporary local id to the server id so the
     // next pull (keyed by server id) doesn't create a duplicate.
@@ -359,6 +411,7 @@ async function pushListingQueue<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>)
 
 export const pushPendingTyreListings = () => pushListingQueue(TYRE_FLUSH);
 export const pushPendingLightListings = () => pushListingQueue(LIGHT_FLUSH);
+export const pushPendingFluidListings = () => pushListingQueue(FLUID_FLUSH);
 
 // ─── Orchestration ───────────────────────────────────────────────────────────
 
@@ -390,14 +443,17 @@ export async function sync(): Promise<SyncResult> {
   await pushPendingStages().catch(note("pushStages"));
   await pushPendingTyreListings().catch(note("pushTyres"));
   await pushPendingLightListings().catch(note("pushLights"));
+  await pushPendingFluidListings().catch(note("pushFluids"));
 
   // Network in parallel, database writes in sequence (single SQLite connection).
-  const [assignments, orders, tyres, lights, catalog] = await Promise.allSettled([
+  const [assignments, orders, tyres, lights, catalog, fluids, fluidCatalog] = await Promise.allSettled([
     fetchAssignments(),
     fetchOrders(),
     tyreListingsApi.getAll(),
     lightListingsApi.getAll(),
     tyreCatalogApi.get(),
+    fluidListingsApi.getAll(),
+    fluidCatalogApi.get(),
   ]);
 
   let assignmentsOk = true;
@@ -411,6 +467,8 @@ export async function sync(): Promise<SyncResult> {
   if (tyres.status === "fulfilled") await applyTyreListings(tyres.value).catch(note("applyTyres")); else note("fetchTyres")(tyres.reason);
   if (lights.status === "fulfilled") await applyLightListings(lights.value).catch(note("applyLights")); else note("fetchLights")(lights.reason);
   if (catalog.status === "fulfilled") await cacheTyreCatalog(catalog.value.brands).catch(note("cacheCatalog")); else note("fetchCatalog")(catalog.reason);
+  if (fluids.status === "fulfilled") await applyFluidListings(fluids.value).catch(note("applyFluids")); else note("fetchFluids")(fluids.reason);
+  if (fluidCatalog.status === "fulfilled") await cacheFluidCatalog(fluidCatalog.value).catch(note("cacheFluidCatalog")); else note("fetchFluidCatalog")(fluidCatalog.reason);
 
   if (!assignmentsOk) return { ok: false, error: firstError };
   return { ok: true, error: firstError };

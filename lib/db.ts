@@ -1,4 +1,5 @@
 import * as SQLite from "expo-sqlite";
+import type { ApiFluidCatalog } from "./api";
 import { createLogger } from "./logger";
 
 const log = createLogger("db");
@@ -90,6 +91,28 @@ export type LightListing = {
   price_ghs: number;
   photos: string; // JSON string[]
   in_stock: number;
+  updated_at: string;
+};
+
+export type FluidListing = {
+  id: string;
+  server_id: string | null;
+  fluid_product_id: string | null; // null until the server resolves the pick
+  kind_id: string;
+  kind: string;
+  brand_id: string | null; // null = typed ("Not in the list")
+  brand: string;
+  product: string;
+  grade: string; // "" when not used
+  coolant_colour: string;
+  coolant_mix: string;
+  size_label: string;
+  status: string; // "APPROVED" | "PENDING" (server) | "LOCAL" (not sent yet)
+  review_status: string; // "OK" | "PRICE_CHECK"
+  price_ghs: number;
+  photos: string; // JSON string[]
+  in_stock: number;
+  price_advice: string | null; // JSON { lowestGhs, maxGhs } from the server, or null
   updated_at: string;
 };
 
@@ -257,6 +280,46 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE tyre_listings ADD COLUMN proposed INTEGER NOT NULL DEFAULT 0;
   `,
+  // v6 — oils & fluids listings, offline-first like tyres and lamps, and the cached fluid catalog.
+  `
+  CREATE TABLE IF NOT EXISTS fluid_listings (
+    id TEXT PRIMARY KEY,
+    server_id TEXT,
+    fluid_product_id TEXT,
+    kind_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    brand_id TEXT,
+    brand TEXT NOT NULL,
+    product TEXT NOT NULL,
+    grade TEXT NOT NULL DEFAULT '',
+    coolant_colour TEXT NOT NULL DEFAULT '',
+    coolant_mix TEXT NOT NULL DEFAULT '',
+    size_label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'LOCAL',
+    review_status TEXT NOT NULL DEFAULT 'OK',
+    price_ghs INTEGER NOT NULL,
+    photos TEXT NOT NULL DEFAULT '[]',
+    in_stock INTEGER NOT NULL DEFAULT 1,
+    price_advice TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS fluid_listing_queue (
+    id TEXT PRIMARY KEY,
+    op TEXT NOT NULL,
+    listing_id TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS fluid_catalog_cache (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_fluid_queue_synced ON fluid_listing_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_fluid_listings_server ON fluid_listings(server_id);
+  `,
 ];
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -307,6 +370,7 @@ export async function clearAllData(): Promise<void> {
     for (const table of [
       "assignments", "quote_queue", "decline_queue", "products_cache", "tyre_catalog_cache",
       "orders", "stage_queue", "tyre_listings", "tyre_listing_queue", "light_listings", "light_listing_queue",
+      "fluid_listings", "fluid_listing_queue", "fluid_catalog_cache",
     ]) {
       await db.runAsync(`DELETE FROM ${table}`);
     }
@@ -608,13 +672,14 @@ export async function markStageError(id: string, error: string): Promise<void> {
 // Both listing kinds are offline-first: a local row keyed by a temporary
 // "local-…" id until the create flushes, then re-keyed to the server id.
 
-export type ListingKind = "tyre" | "light";
+export type ListingKind = "tyre" | "light" | "fluid";
 
 type ListingTables = { rows: string; queue: string };
 
 const LISTING_TABLES: Record<ListingKind, ListingTables> = {
   tyre: { rows: "tyre_listings", queue: "tyre_listing_queue" },
   light: { rows: "light_listings", queue: "light_listing_queue" },
+  fluid: { rows: "fluid_listings", queue: "fluid_listing_queue" },
 };
 
 export async function upsertTyreListing(t: TyreListing): Promise<void> {
@@ -642,6 +707,35 @@ export async function upsertLightListing(l: LightListing): Promise<void> {
        photos = excluded.photos, in_stock = excluded.in_stock, updated_at = excluded.updated_at`,
     [l.id, l.server_id, l.light_type, l.side, l.make, l.model, l.year, l.condition, l.price_ghs, l.photos, l.in_stock, l.updated_at],
   );
+}
+
+const FLUID_COLS = ["id", "server_id", "fluid_product_id", "kind_id", "kind", "brand_id", "brand", "product", "grade", "coolant_colour", "coolant_mix",
+  "size_label", "status", "review_status", "price_ghs", "photos", "in_stock", "price_advice", "updated_at"] as const;
+
+export async function upsertFluidListing(l: FluidListing): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO fluid_listings (${FLUID_COLS.join(", ")}) VALUES (${FLUID_COLS.map(() => "?").join(", ")})
+     ON CONFLICT(id) DO UPDATE SET ${FLUID_COLS.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ")}`,
+    FLUID_COLS.map((c) => l[c]),
+  );
+}
+
+export async function getFluidListings(): Promise<FluidListing[]> {
+  const db = await getDb();
+  return db.getAllAsync<FluidListing>(`SELECT * FROM fluid_listings ORDER BY updated_at DESC`);
+}
+
+export async function cacheFluidCatalog(c: ApiFluidCatalog): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`INSERT OR REPLACE INTO fluid_catalog_cache (id, json, updated_at) VALUES (1, ?, ?)`, [JSON.stringify(c), new Date().toISOString()]);
+}
+
+export async function getCachedFluidCatalog(): Promise<ApiFluidCatalog | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ json: string }>(`SELECT json FROM fluid_catalog_cache WHERE id = 1`);
+  if (!row) return null;
+  try { return JSON.parse(row.json) as ApiFluidCatalog; } catch { return null; }
 }
 
 export async function getTyreListings(): Promise<TyreListing[]> {
@@ -726,6 +820,7 @@ export async function countPendingWrites(): Promise<number> {
       (SELECT COUNT(*) FROM decline_queue WHERE synced = 0) +
       (SELECT COUNT(*) FROM stage_queue WHERE synced = 0) +
       (SELECT COUNT(*) FROM tyre_listing_queue WHERE synced = 0) +
-      (SELECT COUNT(*) FROM light_listing_queue WHERE synced = 0) AS n`);
+      (SELECT COUNT(*) FROM light_listing_queue WHERE synced = 0) +
+      (SELECT COUNT(*) FROM fluid_listing_queue WHERE synced = 0) AS n`);
   return row?.n ?? 0;
 }

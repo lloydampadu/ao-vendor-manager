@@ -1,7 +1,7 @@
 jest.mock("@/lib/db", () => ({}));
 jest.mock("../lib/db", () => ({}));
 
-import { tyrePayload } from "@/lib/listings";
+import { fluidPayload, tyrePayload } from "@/lib/listings";
 import type { TyreListing } from "@/lib/db";
 
 const row: TyreListing = {
@@ -21,5 +21,18 @@ describe("tyrePayload", () => {
     expect(tyrePayload(proposed)).toMatchObject({ proposal: true, brand: proposed.brand, model: proposed.model });
     expect(tyrePayload({ ...proposed, proposed: 0 })).not.toHaveProperty("proposal");
     expect(tyrePayload({ ...proposed, tyre_size_id: "s1" })).not.toHaveProperty("proposal");
+  });
+});
+
+describe("fluidPayload", () => {
+  it("sends a typed brand as brandName, a picked one as brandId, and always the genuine tick", () => {
+    const base = { id: "local-1", server_id: null, fluid_product_id: null, kind_id: "k", kind: "Engine oil", brand_id: "b", brand: "Total", product: "Quartz 9000",
+      grade: "5W-40", coolant_colour: "", coolant_mix: "", size_label: "4 L", status: "LOCAL", review_status: "OK", price_ghs: 300, photos: "[]", in_stock: 1, price_advice: null, updated_at: "x" };
+    expect(fluidPayload(base)).toEqual({
+      server_id: null, kindId: "k", brandId: "b", productName: "Quartz 9000", grade: "5W-40", coolantColour: null, coolantMix: null, sizeLabel: "4 L",
+      priceGhs: 300, photos: [], inStock: true, genuine: true,
+    });
+    expect(fluidPayload({ ...base, brand_id: null, brand: "Fuchs" })).toMatchObject({ brandName: "Fuchs" });
+    expect(fluidPayload({ ...base, brand_id: null, brand: "Fuchs" })).not.toHaveProperty("brandId");
   });
 });

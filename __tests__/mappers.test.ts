@@ -1,4 +1,4 @@
-import { earningsSummary, mapAssignment, mapLight, mapOrder, mapTyre, mergeAssignment, payoutLabel, type ApiAssignment } from "@/lib/mappers";
+import { earningsSummary, mapAssignment, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, payoutLabel, type ApiAssignment } from "@/lib/mappers";
 import type { Assignment } from "@/lib/db";
 
 const serverAssignment: ApiAssignment = {
@@ -101,5 +101,20 @@ describe("payout helpers", () => {
     expect(payoutLabel({ payout_status: "UNPAID", payout_method: null, payout_at: null, stage: "TO_BRING" })).toEqual({ text: "Paid after collection", tone: "muted" });
     expect(payoutLabel({ payout_status: "UNPAID", payout_method: null, payout_at: null, stage: "HANDED_OVER" })).toEqual({ text: "Payout pending", tone: "owed" });
     expect(payoutLabel({ payout_status: "PAID", payout_method: "CASH", payout_at: null, stage: "HANDED_OVER" })).toEqual({ text: "Paid by cash", tone: "paid" });
+  });
+});
+
+describe("mapFluid", () => {
+  it("maps a fluid listing from the server", () => {
+    const row = mapFluid({
+      id: "f1", fluidProductId: "p1", priceGhs: 300, photos: ["https://p/1.jpg"], inStock: true, updatedAt: "2026-10-08T00:00:00Z",
+      reviewStatus: "PRICE_CHECK", priceAdvice: { lowestGhs: 250, maxGhs: 275 },
+      product: { kindId: "k", kind: "Engine oil", brandId: "b", brand: "Total", name: "Quartz 9000", grade: "5W-40", coolantColour: null, coolantMix: null, sizeLabel: "4 L", title: "Total Quartz 9000 · 5W-40 · 4 L", status: "APPROVED" },
+    });
+    expect(row).toEqual({
+      id: "f1", server_id: "f1", fluid_product_id: "p1", kind_id: "k", kind: "Engine oil", brand_id: "b", brand: "Total", product: "Quartz 9000",
+      grade: "5W-40", coolant_colour: "", coolant_mix: "", size_label: "4 L", status: "APPROVED", review_status: "PRICE_CHECK",
+      price_ghs: 300, photos: '["https://p/1.jpg"]', in_stock: 1, price_advice: '{"lowestGhs":250,"maxGhs":275}', updated_at: "2026-10-08T00:00:00Z",
+    });
   });
 });
