@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "./node_modules/.bin/expo start",
+    "sim": "NODE_OPTIONS=--dns-result-order=ipv4first ./node_modules/.bin/expo start -c --localhost --ios",
     "android": "./node_modules/.bin/expo run:android",
     "ios": "./node_modules/.bin/expo run:ios",
     "typecheck": "tsc --noEmit",
