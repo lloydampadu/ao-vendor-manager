@@ -99,7 +99,27 @@ export type ApiTyreListing = {
   tyreSizeId?: string | null;
   /** Only present for in-stock, New, linked listings priced above the band. */
   priceAdvice?: { lowestGhs: number; maxGhs: number } | null;
+  /** Set when the vendor proposed this tyre for the catalog; it waits for an admin while tyreSizeId is null. */
+  proposedAt?: string | null;
   updatedAt: string;
+};
+
+export type ApiFluidListing = {
+  id: string; fluidProductId: string; priceGhs: number; photos: string[]; inStock: boolean; updatedAt: string;
+  reviewStatus: "OK" | "PRICE_CHECK";
+  priceAdvice?: { lowestGhs: number; maxGhs: number } | null;
+  /** Taken down by AbosseyOkai Direct; the reason is for the vendor. */
+  hidden: boolean; hiddenReason: string | null;
+  product: { kindId: string; kind: string; brandId: string; brand: string; name: string; grade: string | null;
+    coolantColour: string | null; coolantMix: string | null; sizeLabel: string; title: string; status: "APPROVED" | "PENDING" };
+};
+export type ApiFluidCatalog = {
+  kinds: { id: string; slug: string; name: string; grades: string[]; gradeRequired: boolean; coolant: boolean }[];
+  brands: { id: string; name: string }[];
+  lines: { kindId: string; brandId: string; name: string }[];
+  sizes: { label: string; ml: number }[];
+  coolantColours: { value: string; label: string }[];
+  coolantMixes: { value: string; label: string }[];
 };
 
 export type ApiLightListing = {
@@ -177,6 +197,17 @@ export const lightListingsApi = {
   create: (body: unknown) => api.post<{ listing: ApiLightListing }>("/vendor/light-listings", body),
   update: (id: string, body: unknown) => api.patch<{ listing: ApiLightListing }>(`/vendor/light-listings/${id}`, body),
   delete: (id: string) => api.delete<{ ok: true }>(`/vendor/light-listings/${id}`),
+};
+
+export const fluidListingsApi = {
+  getAll: () => api.get<{ listings: ApiFluidListing[] }>("/vendor/fluid-listings"),
+  create: (body: unknown) => api.post<{ listing: ApiFluidListing; pending: boolean }>("/vendor/fluid-listings", body),
+  update: (id: string, body: unknown) => api.patch<{ listing: ApiFluidListing }>(`/vendor/fluid-listings/${id}`, body),
+  delete: (id: string) => api.delete<{ ok: true }>(`/vendor/fluid-listings/${id}`),
+};
+
+export const fluidCatalogApi = {
+  get: () => api.get<ApiFluidCatalog>("/fluids/catalog"),
 };
 
 export const tyreCatalogApi = {

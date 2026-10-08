@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, SectionList, StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { errorMessage, specialtyRequestsApi } from "@/lib/api";
 import { groupOf, requestableSections } from "@/lib/approvals";
+import { getCachedFluidCatalog } from "@/lib/db";
 import { useAuthStore } from "@/store/auth-store";
 import ReusableText from "./Reusable/ReusableText";
 import ReusableBtn from "./Reusable/ReusableBtn";
@@ -17,7 +18,7 @@ type Props = {
 };
 
 /**
- * Ask an admin to approve new things to sell: a part, Tyres or Lamps. They show
+ * Ask an admin to approve new things to sell: a part, Tyres, Lamps or Oils & fluids. They show
  * as "Waiting for approval" and can be posted once approved.
  */
 export function RequestApprovalSheet({ visible, onClose, category }: Props): React.JSX.Element {
@@ -27,13 +28,18 @@ export function RequestApprovalSheet({ visible, onClose, category }: Props): Rea
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  const [fluidKinds, setFluidKinds] = useState<string[]>([]);
+  // Re-read on every open: the catalog may have been cached since the sheet mounted.
+  useEffect(() => {
+    if (visible) void getCachedFluidCatalog().then((c) => setFluidKinds(c?.kinds.map((k) => k.name) ?? [])).catch(() => {});
+  }, [visible]);
 
   const sections = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return requestableSections(vendor?.specialties ?? [], vendor?.pendingSpecialties ?? [], category)
+    return requestableSections(vendor?.specialties ?? [], vendor?.pendingSpecialties ?? [], category, fluidKinds)
       .map((s) => ({ title: s.title, data: q ? s.items.filter((i) => i.toLowerCase().includes(q)) : s.items }))
       .filter((s) => s.data.length > 0);
-  }, [vendor?.specialties, vendor?.pendingSpecialties, category, search]);
+  }, [vendor?.specialties, vendor?.pendingSpecialties, category, fluidKinds, search]);
 
   function close(): void {
     setSearch("");

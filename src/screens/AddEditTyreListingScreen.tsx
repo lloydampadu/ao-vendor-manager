@@ -20,10 +20,6 @@ const CONDITIONS = ["NEW", "USED"] as const;
 type Condition = (typeof CONDITIONS)[number];
 const CONDITION_LABEL: Record<Condition, string> = { NEW: "Brand New", USED: "Home Used" };
 
-// Vendors pick the kind of tyre rather than an exact product name; this maps to
-// the customer-facing "Tyre type" categories and is stored in `model`.
-const TYRE_TYPES = ["All-Season", "Performance", "Off-road", "Standard"];
-
 const MAX_PHOTOS = 4;
 
 // Only ask the server about sizes that could be real, so typing "2", "20", "205"
@@ -104,7 +100,7 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
     if (!(h > 0)) { Alert.alert("Tyre height", "Enter a valid height, e.g. 55."); return null; }
     if (!(d > 0)) { Alert.alert("Rim size", "Enter a valid rim diameter, e.g. 16."); return null; }
     if (!brand.trim()) { Alert.alert("Brand", "Choose or type the tyre brand."); return null; }
-    if (!model.trim()) { Alert.alert(showPickers ? "Model" : "Tyre type", showPickers ? "Choose the tyre model." : "Choose the tyre type."); return null; }
+    if (!model.trim()) { Alert.alert("Model", showPickers ? "Choose the tyre model." : "Type the model, as written on the tyre."); return null; }
     if (showPickers && !sizeId) { Alert.alert("Model", "Choose the tyre model from the list, or tap \"Not in the list\"."); return null; }
     if (!(priceGhs > 0)) { Alert.alert("Price", "Enter a valid price in GHS."); return null; }
     if (photos.uploading) { Alert.alert("Please wait", "A photo is still uploading."); return null; }
@@ -126,6 +122,8 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
         photos: JSON.stringify(photos.urls),
         in_stock: inStock ? 1 : 0,
         tyre_size_id: showPickers ? sizeId : null,
+        // "Not in the list": the server links it if the catalog has it, else an admin approves it first.
+        proposed: showPickers ? 0 : 1,
         // Advice describes the old price/state; keep it only if nothing it depends on changed.
         price_advice:
           existing && existing.price_ghs === v.priceGhs && existing.condition === condition
@@ -171,7 +169,10 @@ export default function AddEditTyreListingScreen(): React.JSX.Element {
             <><ReusableText text="No listed tyres for this size yet" family="regular" size={11} color={C.gray2} /><HeightSpacer height={8} /></>
           ) : null}
           <SelectField label="Brand *" value={brand} onChange={setBrand} options={brandNames} placeholder="Select brand" />
-          <SelectField label="Tyre type *" value={model} onChange={setModel} options={TYRE_TYPES} placeholder="Select tyre type" />
+          <FormField label="Model, as written on the tyre *">
+            <FormInput value={model} onChangeText={setModel} placeholder="e.g. Primacy 4" autoCapitalize="words" />
+          </FormField>
+          <ReusableText text="We'll check this tyre and add it to the list. Customers see it once it's approved." family="regular" size={11} color={C.gray2} />
           {manual && sizeOk && catalogState === "ready" && choices.length > 0 ? (
             <TouchableOpacity onPress={() => { setManual(false); setBrand(""); setModel(""); }} style={styles.linkRow} accessibilityRole="button">
               <ReusableText text="Pick from the tyre list instead" family="medium" size={13} color={C.primary} />

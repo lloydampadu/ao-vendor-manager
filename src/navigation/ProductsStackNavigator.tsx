@@ -4,16 +4,18 @@ import ProductsScreen from "../screens/ProductsScreen";
 import AddProductScreen from "../screens/AddProductScreen";
 import AddEditTyreListingScreen from "../screens/AddEditTyreListingScreen";
 import AddEditLightListingScreen from "../screens/AddEditLightListingScreen";
+import AddEditFluidListingScreen from "../screens/AddEditFluidListingScreen";
 import AddEditPartListingScreen from "../screens/AddEditPartListingScreen";
-import type { TyreListing, LightListing } from "@/lib/db";
+import type { TyreListing, LightListing, FluidListing } from "@/lib/db";
 import type { ApiProduct } from "@/lib/api";
 import { useThemeColors } from "../../constants/theme";
 
 export type ProductsStackParamList = {
-  Products: undefined;
+  ProductsList: undefined;
   AddProduct: undefined;
   AddEditTyreListing: { listing?: TyreListing } | undefined;
   AddEditLightListing: { listing?: LightListing } | undefined;
+  AddEditFluidListing: { listing?: FluidListing } | undefined;
   AddEditPartListing: { category: string; product?: ApiProduct };
 };
 
@@ -24,7 +26,7 @@ export default function ProductsStackNavigator(): React.JSX.Element {
   const C = useThemeColors();
   return (
     <Stack.Navigator
-      initialRouteName="Products"
+      initialRouteName="ProductsList"
       screenOptions={{
         headerStyle: { backgroundColor: C.white },
         headerTintColor: C.black,
@@ -32,7 +34,7 @@ export default function ProductsStackNavigator(): React.JSX.Element {
         headerBackTitle: "Back",
       }}
     >
-      <Stack.Screen name="Products" component={ProductsScreen} options={{ title: "My Products" }} />
+      <Stack.Screen name="ProductsList" component={ProductsScreen} options={{ title: "My Products" }} />
       <Stack.Screen name="AddProduct" component={AddProductScreen} options={{ title: "Add a product", headerShown: true }} />
       <Stack.Screen
         name="AddEditTyreListing"
@@ -43,6 +45,11 @@ export default function ProductsStackNavigator(): React.JSX.Element {
         name="AddEditLightListing"
         component={AddEditLightListingScreen}
         options={({ route }) => ({ title: route.params?.listing ? "Edit Lamp" : "Add Lamp" })}
+      />
+      <Stack.Screen
+        name="AddEditFluidListing"
+        component={AddEditFluidListingScreen}
+        options={({ route }) => ({ title: route.params?.listing ? "Edit oil or fluid" : "Add oil or fluid" })}
       />
       <Stack.Screen
         name="AddEditPartListing"
