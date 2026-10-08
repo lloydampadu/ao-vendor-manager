@@ -99,6 +99,8 @@ export type ApiTyreListing = {
   tyreSizeId?: string | null;
   /** Only present for in-stock, New, linked listings priced above the band. */
   priceAdvice?: { lowestGhs: number; maxGhs: number } | null;
+  /** Set when the vendor proposed this tyre for the catalog; it waits for an admin while tyreSizeId is null. */
+  proposedAt?: string | null;
   updatedAt: string;
 };
 

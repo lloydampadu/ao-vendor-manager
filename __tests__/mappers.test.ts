@@ -49,7 +49,7 @@ describe("mergeAssignment", () => {
 describe("listing mappers", () => {
   it("coerces nullable brand/model to empty strings for NOT NULL columns", () => {
     const row = mapTyre({ id: "t1", width: 205, height: 55, diameter: 16, brand: null, model: null, condition: "NEW", priceGhs: 850, photos: ["https://x/1.jpg"], inStock: true, updatedAt: "2026-10-01T00:00:00Z" });
-    expect(row).toMatchObject({ id: "t1", server_id: "t1", brand: "", model: "", in_stock: 1, photos: '["https://x/1.jpg"]' });
+    expect(row).toMatchObject({ id: "t1", server_id: "t1", brand: "", model: "", in_stock: 1, photos: '["https://x/1.jpg"]', proposed: 0 });
   });
 
   it("maps the catalog link and price advice on tyres", () => {
@@ -60,6 +60,15 @@ describe("listing mappers", () => {
     const unlinked = mapTyre(base);
     expect(unlinked.tyre_size_id).toBeNull();
     expect(unlinked.price_advice).toBeNull();
+    expect(linked.proposed).toBe(0);
+    expect(unlinked.proposed).toBe(0);
+  });
+
+  it("marks a tyre waiting for an admin (proposed, not linked yet)", () => {
+    const base = { id: "t1", width: 205, height: 55, diameter: 16, brand: "Westlake", model: "RP18", condition: "NEW", priceGhs: 850, photos: [], inStock: true, updatedAt: "2026-10-01T00:00:00Z" };
+    expect(mapTyre({ ...base, proposedAt: "2026-10-08T00:00:00Z", tyreSizeId: null }).proposed).toBe(1);
+    // Linked by an admin: no longer waiting, though proposedAt stays as history.
+    expect(mapTyre({ ...base, proposedAt: "2026-10-08T00:00:00Z", tyreSizeId: "s1" }).proposed).toBe(0);
   });
 
   it("maps lights and keeps the server id as the local key", () => {

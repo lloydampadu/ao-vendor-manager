@@ -30,6 +30,8 @@ export function tyrePayload(l: TyreListing): Record<string, unknown> {
     // Sent only when linked: the server then takes brand/model from the catalog. Omitted
     // (not null) otherwise, so an unchanged free-text edit never unlinks by accident.
     ...(l.tyre_size_id ? { tyreSizeId: l.tyre_size_id } : {}),
+    // "Not in the list": ask for this tyre to be added. The server links it at once when it is already in the catalog.
+    ...(l.proposed === 1 && !l.tyre_size_id ? { proposal: true } : {}),
   };
 }
 
