@@ -58,3 +58,7 @@ The app is a client of `AbosseyOkai/apps/api`. Endpoints used: `/vendor-auth/*`,
 ## Adding a SQLite column
 
 Append a new entry to `MIGRATIONS` in `lib/db.ts`. Never edit a shipped step; `PRAGMA user_version` tracks what each install has applied.
+
+## Licences
+
+Fonts: Sora, SIL Open Font License 1.1 (see `assets/fonts/OFL.txt`).
