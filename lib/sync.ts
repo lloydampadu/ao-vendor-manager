@@ -333,6 +333,12 @@ const LIGHT_FLUSH: ListingFlushConfig<LightListing, ApiLightListing> = {
   idOf: (l) => l.id,
 };
 
+/** The 409 ALREADY_LISTED body carries the id of the listing the vendor already has. */
+function alreadyListedId(err: unknown): string | null {
+  const body = isApiError(err) && err.status === 409 ? (err.body as { code?: unknown; listingId?: unknown } | undefined) : undefined;
+  return body?.code === "ALREADY_LISTED" && typeof body.listingId === "string" ? body.listingId : null;
+}
+
 const FLUID_FLUSH: ListingFlushConfig<FluidListing, ApiFluidListing> = {
   kind: "fluid",
   create: fluidListingsApi.create,
@@ -342,15 +348,7 @@ const FLUID_FLUSH: ListingFlushConfig<FluidListing, ApiFluidListing> = {
   upsert: upsertFluidListing,
   rejectCreate: markFluidRejected,
   idOf: (l) => l.id,
-  existingIdOf: (err) => {
-    const body = isApiError(err) && err.status === 409 ? (err.body as { code?: unknown; listingId?: unknown } | undefined) : undefined;
-    return body?.code === "ALREADY_LISTED" && typeof body.listingId === "string" ? body.listingId : null;
-  },
-};
-
-const existingListingId = (err: unknown): string | null => {
-  const body = isApiError(err) && err.status === 409 ? (err.body as { code?: unknown; listingId?: unknown } | undefined) : undefined;
-  return body?.code === "ALREADY_LISTED" && typeof body.listingId === "string" ? body.listingId : null;
+  existingIdOf: alreadyListedId,
 };
 
 // Lazy wrappers: the API object is resolved at call time, so a test's partial mock of ../lib/api still loads.
@@ -363,7 +361,7 @@ const BATTERY_FLUSH: ListingFlushConfig<BatteryListing, ApiBatteryListing> = {
   upsert: upsertBatteryListing,
   rejectCreate: (id, reason) => markListingRejected("battery", id, reason),
   idOf: (l) => l.id,
-  existingIdOf: existingListingId,
+  existingIdOf: alreadyListedId,
   adoptFields: ["warrantyMonths"],
 };
 

@@ -160,3 +160,9 @@ describe("Batteries approval", () => {
     expect(groupOf("Batteries")).toBe("Batteries");
   });
 });
+
+describe("requestableSections batteries", () => {
+  it("does not offer Batteries to a vendor already approved via the Battery part", () => {
+    expect(requestableSections(["Battery"], []).map((s) => s.title)).not.toContain("Batteries");
+  });
+});

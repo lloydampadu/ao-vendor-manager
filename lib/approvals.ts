@@ -111,7 +111,7 @@ export function requestableSections(specialties: readonly string[], pending: rea
     if (open(TYRES)) sections.push({ title: "Tyres", items: [TYRES] });
     // Asking for the whole family, or for one kind; the family covers every kind, so it hides them once approved.
     if (open(OILS_FLUIDS)) sections.push({ title: OILS_FLUIDS, items: [OILS_FLUIDS, ...fluidKindNames.filter(open)] });
-    if (open(BATTERIES)) sections.push({ title: BATTERIES, items: [BATTERIES] });
+    if (open(BATTERIES) && !canListBatteries(specialties)) sections.push({ title: BATTERIES, items: [BATTERIES] });
   }
   for (const [title, parts] of Object.entries(PART_CATEGORIES)) {
     if (category && title !== category) continue;
