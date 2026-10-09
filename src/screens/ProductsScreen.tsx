@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { errorMessage, productsApi, type ApiProduct } from "@/lib/api";
 import { cacheProducts, getCachedProducts, getFluidListings, getLightListings, getTyreListings, type FluidListing, type LightListing, type TyreListing } from "@/lib/db";
 import { discardRejectedFluid, removeListing, setFluidStock, saveLightListing, saveTyreListing } from "@/lib/listings";
+import { batteryListingTitle } from "@/lib/battery-form";
 import { fluidListingTitle, fluidNote } from "@/lib/fluid-catalog";
 import { parseJson } from "@/lib/assignment-status";
 import { productSections, type ProductItem } from "@/lib/products";
@@ -89,6 +90,8 @@ export default function ProductsScreen(): React.JSX.Element {
       const next = await setFluidStock(item.row, !item.row.in_stock);
       fluids.setData((prev) => prev.map((l) => (l.id === next.id ? next : l)));
       void startSync();
+    } else if (item.kind === "battery") {
+      return; // Task 14 wires the battery list into this screen.
     } else {
       const p = item.row;
       const flip = (inStock: boolean) => setParts((prev) => prev.map((x) => (x.id === p.id ? { ...x, inStock } : x)));
@@ -120,6 +123,8 @@ export default function ProductsScreen(): React.JSX.Element {
       else await removeListing("fluid", item.row.id, item.row.server_id);
       await fluids.refresh();
       void startSync();
+    } else if (item.kind === "battery") {
+      return; // Task 14
     } else {
       try {
         await productsApi.delete(item.row.id);
@@ -141,6 +146,7 @@ export default function ProductsScreen(): React.JSX.Element {
     if (item.kind === "tyre") nav.navigate("AddEditTyreListing", { listing: item.row });
     else if (item.kind === "lamp") nav.navigate("AddEditLightListing", { listing: item.row });
     else if (item.kind === "fluid") nav.navigate("AddEditFluidListing", { listing: item.row });
+    else if (item.kind === "battery") return; // Task 14
     else nav.navigate("AddEditPartListing", { category: item.row.category ?? "Other", product: item.row });
   }
 
@@ -209,6 +215,7 @@ function titleOf(item: ProductItem): string {
   if (item.kind === "tyre") return `${item.row.brand} ${tyreSizeLabel(item.row)}`.trim();
   if (item.kind === "lamp") return `${item.row.light_type}${item.row.side !== "N/A" ? ` (${item.row.side})` : ""}`;
   if (item.kind === "fluid") return fluidListingTitle(item.row);
+  if (item.kind === "battery") return batteryListingTitle(item.row);
   return `"${item.row.name}"`;
 }
 
@@ -229,6 +236,12 @@ function cardOf(item: ProductItem) {
     return { title: `${l.brand} ${l.product}`, subtitle: [l.grade, l.size_label].filter(Boolean).join(" · "), priceGhs: l.price_ghs, condition: "NEW",
       photo: parseJson<string[]>(l.photos, [])[0], inStock: l.in_stock === 1, placeholderIcon: "water-outline" as const,
       note: fluidNote(l) ?? priceNote(parsePriceAdvice(l.price_advice)) };
+  }
+  if (item.kind === "battery") {
+    const l = item.row;
+    return { title: batteryListingTitle(l), subtitle: l.brand, priceGhs: l.price_ghs, condition: "NEW",
+      photo: parseJson<string[]>(l.photos, [])[0], inStock: l.in_stock === 1, placeholderIcon: "battery-charging-outline" as const,
+      note: priceNote(parsePriceAdvice(l.price_advice)) };
   }
   const p = item.row;
   return { title: p.name, titleSize: 12, priceGhs: p.priceGhs, condition: p.condition, photo: p.photos[0], inStock: p.inStock, placeholderIcon: "cube-outline" as const };
