@@ -82,6 +82,17 @@ describe("the parts list cache", () => {
     expect(db.getCachedCatalog).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a car-list read's answer when a parts-list write lands meanwhile", async () => {
+    let finishRead!: (row: { value: typeof cars; etag: string }) => void;
+    mocked(db.getCachedCatalog).mockReturnValueOnce(new Promise((resolve) => { finishRead = resolve; }));
+    const reading = loadCarList();
+    await storePartsCatalog({ status: 200, body: parts2, etag: '"p2"' });
+    finishRead({ value: cars, etag: '"c1"' });
+    expect(await reading).toEqual(cars);
+    expect(await loadCarList()).toEqual(cars);
+    expect(db.getCachedCatalog).toHaveBeenCalledTimes(1);
+  });
+
   it("forgets the parsed list on logout, also when a read was in flight", async () => {
     await storePartsCatalog({ status: 200, body: parts, etag: '"p1"' });
     forgetCatalogs();

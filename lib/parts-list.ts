@@ -26,7 +26,7 @@ async function storeCatalog<T>(table: CatalogCacheTable, res: EtagResult<T>): Pr
 async function loadCatalog<T>(table: CatalogCacheTable): Promise<T | null> {
   const hit = remembered<T>(table);
   if (hit !== undefined) return hit;
-  const token = readToken();
+  const token = readToken(table);
   return rememberRead(table, (await getCachedCatalog<T>(table))?.value ?? null, token);
 }
 
