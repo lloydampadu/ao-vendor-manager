@@ -122,6 +122,18 @@ export type ApiFluidCatalog = {
   coolantMixes: { value: string; label: string }[];
 };
 
+export type ApiBatteryListing = {
+  id: string; batteryProductId: string; priceGhs: number; photos: string[]; inStock: boolean; warrantyMonths: number; updatedAt: string;
+  reviewStatus: "OK" | "PRICE_CHECK"; priceAdvice?: { lowestGhs: number; maxGhs: number } | null; hidden: boolean; hiddenReason: string | null;
+  product: { brandId: string; brand: string; sizeId: string; sizeCode: string; terminal: "LEFT" | "RIGHT"; voltage: number; capacityAh: number; cca: number | null; type: string; title: string; status: "APPROVED" | "PENDING" };
+};
+export type ApiBatteryCatalog = {
+  brands: { id: string; name: string }[];
+  sizes: { id: string; code: string; standard: string }[];
+  products: { id: string; brandId: string; sizeId: string; terminal: "LEFT" | "RIGHT"; voltage: number; capacityAh: number; cca: number | null; type: string }[];
+  types: { value: string; label: string }[]; terminals: { value: string; label: string }[]; voltages: number[]; warrantyMaxMonths: number;
+};
+
 export type ApiLightListing = {
   id: string;
   lightType: string;
@@ -208,6 +220,17 @@ export const fluidListingsApi = {
 
 export const fluidCatalogApi = {
   get: () => api.get<ApiFluidCatalog>("/fluids/catalog"),
+};
+
+export const batteryListingsApi = {
+  getAll: () => api.get<{ listings: ApiBatteryListing[] }>("/vendor/battery-listings"),
+  create: (body: unknown) => api.post<{ listing: ApiBatteryListing; pending: boolean }>("/vendor/battery-listings", body),
+  update: (id: string, body: unknown) => api.patch<{ listing: ApiBatteryListing }>(`/vendor/battery-listings/${id}`, body),
+  delete: (id: string) => api.delete<{ ok: true }>(`/vendor/battery-listings/${id}`),
+};
+
+export const batteryCatalogApi = {
+  get: () => api.get<ApiBatteryCatalog>("/batteries/catalog"),
 };
 
 export const tyreCatalogApi = {

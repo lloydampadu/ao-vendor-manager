@@ -1,6 +1,6 @@
 // Pure server → SQLite row mappers. No Expo imports so they are unit-testable.
-import type { ApiFluidListing, ApiLightListing, ApiTyreListing } from "./api";
-import type { Assignment, FluidListing, LightListing, Order, TyreListing } from "./db";
+import type { ApiBatteryListing, ApiFluidListing, ApiLightListing, ApiTyreListing } from "./api";
+import type { Assignment, BatteryListing, FluidListing, LightListing, Order, TyreListing } from "./db";
 
 export type ApiAssignment = {
   id: string;
@@ -128,6 +128,18 @@ export function mapFluid(l: ApiFluidListing): FluidListing {
     kind_id: l.product.kindId, kind: l.product.kind, brand_id: l.product.brandId, brand: l.product.brand, product: l.product.name,
     grade: l.product.grade ?? "", coolant_colour: l.product.coolantColour ?? "", coolant_mix: l.product.coolantMix ?? "",
     size_label: l.product.sizeLabel, status: l.product.status, review_status: l.reviewStatus,
+    hidden: l.hidden ? 1 : 0, hidden_reason: l.hidden ? l.hiddenReason ?? null : null, rejected_reason: null,
+    price_ghs: l.priceGhs, photos: JSON.stringify(l.photos ?? []), in_stock: l.inStock ? 1 : 0,
+    price_advice: l.priceAdvice ? JSON.stringify(l.priceAdvice) : null, updated_at: l.updatedAt,
+  };
+}
+
+export function mapBattery(l: ApiBatteryListing): BatteryListing {
+  return {
+    id: l.id, server_id: l.id, battery_product_id: l.batteryProductId,
+    brand_id: l.product.brandId, brand: l.product.brand, size_id: l.product.sizeId, size_code: l.product.sizeCode, terminal: l.product.terminal,
+    battery_type: l.product.type, voltage: l.product.voltage, capacity_ah: l.product.capacityAh, cca: l.product.cca,
+    warranty_months: l.warrantyMonths, status: l.product.status, review_status: l.reviewStatus,
     hidden: l.hidden ? 1 : 0, hidden_reason: l.hidden ? l.hiddenReason ?? null : null, rejected_reason: null,
     price_ghs: l.priceGhs, photos: JSON.stringify(l.photos ?? []), in_stock: l.inStock ? 1 : 0,
     price_advice: l.priceAdvice ? JSON.stringify(l.priceAdvice) : null, updated_at: l.updatedAt,
