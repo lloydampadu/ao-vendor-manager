@@ -1,5 +1,5 @@
 import {
-  NOT_LISTED, batteryListingTitle, batteryPickProblem, brandOptions, catalogProductFor, chooseBrand, emptyBatteryPick, findExistingBattery,
+  NOT_LISTED, batteryListingTitle, batteryPickProblem, brandOptions, catalogProductFor, chooseBrand, emptyBatteryPick, findExistingBattery, pickBrand, pickSize, pickTerminal, ALREADY_LISTED_MESSAGE,
   reconcileBatteryPick, warrantyProblem, withCatalogFigures, type BatteryPick,
 } from "@/lib/battery-form";
 import type { ApiBatteryCatalog } from "@/lib/api";
@@ -54,5 +54,29 @@ describe("battery form", () => {
     expect(findExistingBattery([{ ...row, status: "REJECTED" }], picked())).toBeNull();
     expect(findExistingBattery([row], picked({ terminal: "RIGHT" }))).toBeNull();
     expect(batteryListingTitle(row)).toBe("Varta NS60 · 12V 45Ah · 330 CCA · Positive on the left");
+  });
+});
+
+describe("editing a listed battery", () => {
+  it("only the warranty is checked again: the battery itself is fixed once listed", () => {
+    expect(warrantyProblem("24", catalog.warrantyMaxMonths)).toBeNull();
+    expect(warrantyProblem("-1", catalog.warrantyMaxMonths)).toBe("Enter the warranty in months, from 0 to 60.");
+    expect(warrantyProblem("2.5", catalog.warrantyMaxMonths)).toBe("Enter the warranty in months, from 0 to 60.");
+  });
+});
+
+describe("changing a pick clears what depended on it", () => {
+  const full = () => withCatalogFigures(catalog, picked());
+  it("a new brand clears size, side and figures, and the genuine tick", () => {
+    expect(pickBrand(full(), null)).toMatchObject({ brandId: null, sizeId: "", terminal: "", type: "", capacityAh: "", cca: "", genuine: false });
+  });
+  it("a new size clears side and figures but keeps the brand", () => {
+    expect(pickSize(full(), "s23")).toMatchObject({ brandId: "b-varta", sizeId: "s23", terminal: "", type: "", capacityAh: "", cca: "" });
+  });
+  it("a new side clears the figures so none of another battery's are kept", () => {
+    expect(pickTerminal(full(), "RIGHT")).toMatchObject({ sizeId: "s60", terminal: "RIGHT", type: "", capacityAh: "", cca: "" });
+  });
+  it("the already-listed message is the shared wording", () => {
+    expect(ALREADY_LISTED_MESSAGE).toBe("You already list this. Edit your existing listing.");
   });
 });

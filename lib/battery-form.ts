@@ -11,7 +11,7 @@ export type BatteryPick = {
 };
 
 export const NOT_LISTED = "Not in the list";
-export const ALREADY_LISTED_MESSAGE = "You already list this battery. Edit your existing listing.";
+export const ALREADY_LISTED_MESSAGE = "You already list this. Edit your existing listing.";
 
 export const emptyBatteryPick = (): BatteryPick =>
   ({ brandId: null, brandName: "", sizeId: "", terminal: "", type: "", voltage: 12, capacityAh: "", cca: "", warranty: "", genuine: false });
@@ -20,6 +20,16 @@ export const brandOptions = (c: ApiBatteryCatalog): string[] => [...c.brands.map
 
 /** A new brand (or null for "Not in the list") clears the genuine tick, which named the old brand. */
 export const chooseBrand = (p: BatteryPick, brandId: string | null): BatteryPick => ({ ...p, brandId, brandName: "", genuine: false });
+
+/** Label figures belong to one battery: any change above them starts them again (the catalog refills a known one). */
+const clearFigures = (p: BatteryPick): BatteryPick => ({ ...p, type: "", voltage: 12, capacityAh: "", cca: "" });
+
+/** A new brand clears the size, side and figures that followed it. */
+export const pickBrand = (p: BatteryPick, brandId: string | null): BatteryPick => clearFigures({ ...chooseBrand(p, brandId), sizeId: "", terminal: "" });
+/** A new size clears the side and figures that followed it. */
+export const pickSize = (p: BatteryPick, sizeId: string): BatteryPick => clearFigures({ ...p, sizeId, terminal: "" });
+/** A new side clears the figures, which belong to one battery. */
+export const pickTerminal = (p: BatteryPick, terminal: BatteryPick["terminal"]): BatteryPick => clearFigures({ ...p, terminal });
 
 export function catalogProductFor(c: ApiBatteryCatalog, p: BatteryPick): ApiBatteryCatalog["products"][number] | null {
   if (!p.brandId || !p.sizeId || !p.terminal) return null;
