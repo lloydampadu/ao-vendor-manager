@@ -155,58 +155,21 @@ export async function pullOrders(): Promise<void> {
   await applyOrders(await fetchOrders());
 }
 
-export async function applyTyreListings({ listings }: { listings: ApiTyreListing[] }): Promise<void> {
-  const pending = await getListingIdsWithPendingOps("tyre");
-  for (const l of listings) {
-    if (pending.has(l.id)) continue; // local edit still in flight — don't clobber it
-    await upsertTyreListing(mapTyre(l));
-    await deleteDuplicateListings("tyre", l.id, l.id);
-  }
-  await pruneListings("tyre", new Set(listings.map((l) => l.id)), pending);
-  log.debug("applyTyreListings", { count: listings.length });
-}
+export const applyTyreListings = ({ listings }: { listings: ApiTyreListing[] }) => applyListings(TYRE_FLUSH, listings);
 
 export async function pullTyreListings(): Promise<void> {
   await applyTyreListings(await tyreListingsApi.getAll());
 }
 
-export async function applyLightListings({ listings }: { listings: ApiLightListing[] }): Promise<void> {
-  const pending = await getListingIdsWithPendingOps("light");
-  for (const l of listings) {
-    if (pending.has(l.id)) continue;
-    await upsertLightListing(mapLight(l));
-    await deleteDuplicateListings("light", l.id, l.id);
-  }
-  await pruneListings("light", new Set(listings.map((l) => l.id)), pending);
-  log.debug("applyLightListings", { count: listings.length });
-}
+export const applyLightListings = ({ listings }: { listings: ApiLightListing[] }) => applyListings(LIGHT_FLUSH, listings);
 
 export async function pullLightListings(): Promise<void> {
   await applyLightListings(await lightListingsApi.getAll());
 }
 
-export async function applyFluidListings({ listings }: { listings: ApiFluidListing[] }): Promise<void> {
-  const pending = await getListingIdsWithPendingOps("fluid");
-  for (const l of listings) {
-    if (pending.has(l.id)) continue;
-    await upsertFluidListing(mapFluid(l));
-    await deleteDuplicateListings("fluid", l.id, l.id);
-  }
-  await pruneListings("fluid", new Set(listings.map((l) => l.id)), pending);
-  log.debug("applyFluidListings", { count: listings.length });
-}
+export const applyFluidListings = ({ listings }: { listings: ApiFluidListing[] }) => applyListings(FLUID_FLUSH, listings);
 
-export async function applyBatteryListings({ listings }: { listings: ApiBatteryListing[] }): Promise<void> {
-  // Pending rows are skipped and never pruned; REJECTED rows have no server copy, so pruneListings must keep them.
-  const pending = await getListingIdsWithPendingOps("battery");
-  for (const l of listings) {
-    if (pending.has(l.id)) continue;
-    await upsertBatteryListing(mapBattery(l));
-    await deleteDuplicateListings("battery", l.id, l.id);
-  }
-  await pruneListings("battery", new Set(listings.map((l) => l.id)), pending);
-  log.debug("applyBatteryListings", { count: listings.length });
-}
+export const applyBatteryListings = ({ listings }: { listings: ApiBatteryListing[] }) => applyListings(BATTERY_FLUSH, listings);
 
 export async function pullTyreCatalog(): Promise<void> {
   const { brands } = await tyreCatalogApi.get();
@@ -295,7 +258,24 @@ export async function pushPendingStages(): Promise<void> {
   }
 }
 
-// ─── Listing queues (one flusher for tyres and lights) ───────────────────────
+// ─── Listing queues (one flusher and one apply step for every listing kind) ───
+
+/**
+ * Applies the listings the server returned for one kind. Rows with a local edit in flight are left
+ * alone (and never pruned); the rest are written and de-duplicated; then rows the server no longer
+ * returns are pruned. REJECTED rows have no server copy, so pruneListings keeps them.
+ */
+async function applyListings<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>, listings: TApi[]): Promise<void> {
+  const pending = await getListingIdsWithPendingOps(cfg.kind);
+  for (const l of listings) {
+    const id = cfg.idOf(l);
+    if (pending.has(id)) continue; // local edit still in flight — don't clobber it
+    await cfg.upsert(cfg.toRow(l));
+    await deleteDuplicateListings(cfg.kind, id, id);
+  }
+  await pruneListings(cfg.kind, new Set(listings.map(cfg.idOf)), pending);
+  log.debug("applyListings", { kind: cfg.kind, count: listings.length });
+}
 
 type ListingFlushConfig<TRow, TApi> = {
   kind: ListingKind;
