@@ -1,4 +1,4 @@
-// GENERATED from AbosseyOkai packages/parts/src/index.ts (sha256 6e24df54bf72). Do not edit.
+// GENERATED from AbosseyOkai packages/parts/src/index.ts (sha256 42eebff0c165). Do not edit.
 // Regenerate: node packages/parts/scripts/export-for-vendor-app.mjs <path-to-ao-vendor-manager>
 
 // Matching typed part names against the catalog.
@@ -295,4 +295,27 @@ export function positionTypeFor(p: { sides: PartSides; positions: PartPositions 
   if (p.sides === "LEFT_RIGHT") return "lh_rh";
   if (p.positions === "FRONT_REAR") return "front_rear";
   return "none";
+}
+
+/** Every label the web's position chips write after a part name (web `POSITION_OPTIONS`). */
+export const POSITION_LABELS: ReadonlySet<string> = new Set([
+  "Front", "Rear",
+  "Left (LH)", "Right (RH)",
+  "Front Left (FL)", "Front Right (FR)",
+  "Rear Left (RL)", "Rear Right (RR)",
+]);
+
+const MORE_ITEMS = / \+ \d+ more$/;
+const QUANTITY = / × \d+$/;
+
+/**
+ * The part a request names, without what the request form and the API add to it: " + N more" (the
+ * summary of a multi-item request), " × N" (the tyre count) and " — <position labels joined by + >".
+ * Anything that only looks like a suffix stays, so a real name is never cut.
+ */
+export function requestPartName(raw: string): string {
+  let name = raw.trim().replace(MORE_ITEMS, "").replace(QUANTITY, "");
+  const dash = name.lastIndexOf("—");
+  if (dash > 0 && name.slice(dash + 1).trim().split(" + ").every((label) => POSITION_LABELS.has(label))) name = name.slice(0, dash);
+  return name.trim();
 }
