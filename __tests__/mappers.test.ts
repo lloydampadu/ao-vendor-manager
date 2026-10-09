@@ -1,4 +1,4 @@
-import { earningsSummary, mapAssignment, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, payoutLabel, type ApiAssignment } from "@/lib/mappers";
+import { earningsSummary, mapAssignment, mapBattery, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, payoutLabel, type ApiAssignment } from "@/lib/mappers";
 import type { Assignment } from "@/lib/db";
 
 const serverAssignment: ApiAssignment = {
@@ -118,5 +118,23 @@ describe("mapFluid", () => {
       hidden: 1, hidden_reason: "Not genuine", rejected_reason: null,
       price_ghs: 300, photos: '["https://p/1.jpg"]', in_stock: 1, price_advice: '{"lowestGhs":250,"maxGhs":275}', updated_at: "2026-10-08T00:00:00Z",
     });
+  });
+});
+
+describe("mapBattery", () => {
+  const api = (over: Record<string, unknown> = {}, product: Record<string, unknown> = {}) => ({
+    id: "srv-1", batteryProductId: "p1", priceGhs: 900, photos: ["https://x/a.jpg"], inStock: true, warrantyMonths: 18, updatedAt: "t",
+    reviewStatus: "PRICE_CHECK", priceAdvice: null, hidden: true, hiddenReason: "Looks like a copy",
+    product: { brandId: "b", brand: "Varta", sizeId: "s60", sizeCode: "NS60", terminal: "RIGHT", voltage: 12, capacityAh: 45, cca: null, type: "MF", title: "t", status: "PENDING", ...product },
+    ...over,
+  });
+  it("keeps the vendor's warranty, the product's figures and the review state", () => {
+    const row = mapBattery(api() as never);
+    expect(row).toMatchObject({ id: "srv-1", server_id: "srv-1", battery_product_id: "p1", size_code: "NS60", terminal: "RIGHT", cca: null, warranty_months: 18,
+      status: "PENDING", review_status: "PRICE_CHECK", hidden: 1, hidden_reason: "Looks like a copy", photos: '["https://x/a.jpg"]', in_stock: 1 });
+  });
+  it("drops the hidden reason when not hidden and takes status from the product", () => {
+    const row = mapBattery(api({ hidden: false }, { status: "APPROVED" }) as never);
+    expect(row).toMatchObject({ hidden: 0, hidden_reason: null, status: "APPROVED" });
   });
 });

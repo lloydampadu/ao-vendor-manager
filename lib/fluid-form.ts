@@ -3,10 +3,10 @@
 import type { ApiFluidCatalog } from "./api";
 import type { FluidListing } from "./db";
 import { linesFor, type FluidPick } from "./fluid-catalog";
+import { ALREADY_LISTED_MESSAGE, NOT_LISTED, sameName } from "./listing-pick";
 
-export const NOT_LISTED = "Not in the list";
+export { ALREADY_LISTED_MESSAGE, NOT_LISTED };
 export const NO_GRADE = "No grade";
-export const ALREADY_LISTED_MESSAGE = "You already list this. Edit your existing listing.";
 
 type Kind = ApiFluidCatalog["kinds"][number];
 
@@ -26,8 +26,6 @@ export const productOptions = (c: ApiFluidCatalog, p: FluidPick): string[] => [.
 
 /** A kind whose grade is optional gets a "No grade" choice. */
 export const gradeOptions = (k: Kind): string[] => [...(k.gradeRequired ? [] : [NO_GRADE]), ...k.grades];
-
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * Drops picks that are no longer valid after the catalog or the vendor's approvals changed (a fresh
@@ -51,7 +49,7 @@ export function reconcilePick(c: ApiFluidCatalog, approvedKinds: readonly { id: 
 export function findExistingFluid(rows: readonly FluidListing[], p: FluidPick): FluidListing | null {
   return rows.find((r) =>
     r.status !== "REJECTED" && r.kind_id === p.kindId && r.grade === p.grade && r.coolant_colour === p.colour && r.coolant_mix === p.mix && r.size_label === p.size
-    && same(r.product, p.product)
-    && (p.brandId ? r.brand_id === p.brandId : r.brand_id === null && same(r.brand, p.brandName)),
+    && sameName(r.product, p.product)
+    && (p.brandId ? r.brand_id === p.brandId : r.brand_id === null && sameName(r.brand, p.brandName)),
   ) ?? null;
 }
