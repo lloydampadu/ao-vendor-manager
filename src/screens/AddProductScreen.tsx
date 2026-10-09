@@ -35,6 +35,7 @@ export default function AddProductScreen({ navigation }: Props): React.JSX.Eleme
     if (kind.form === "tyre") navigation.replace("AddEditTyreListing", {});
     else if (kind.form === "lamp") navigation.replace("AddEditLightListing", {});
     else if (kind.form === "fluid") navigation.replace("AddEditFluidListing", {});
+    else if (kind.form === "battery") navigation.replace("AddEditBatteryListing", {});
     else navigation.replace("AddEditPartListing", { category: kind.partCategory! });
   }
 
