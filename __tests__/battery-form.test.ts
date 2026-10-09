@@ -1,5 +1,5 @@
 import {
-  NOT_LISTED, batteryListingTitle, batteryPickProblem, brandOptions, catalogProductFor, chooseBrand, emptyBatteryPick, findExistingBattery, pickBrand, pickSize, pickTerminal, ALREADY_LISTED_MESSAGE,
+  NOT_LISTED, batteryListingTitle, batteryPickProblem, brandOptions, catalogProductFor, chooseBrand, emptyBatteryPick, findExistingBattery, pickBrand, pickSize, pickTerminal, ALREADY_LISTED_MESSAGE, resolveTypedBrand,
   reconcileBatteryPick, warrantyProblem, withCatalogFigures, type BatteryPick,
 } from "@/lib/battery-form";
 import type { ApiBatteryCatalog } from "@/lib/api";
@@ -78,5 +78,25 @@ describe("changing a pick clears what depended on it", () => {
   });
   it("the already-listed message is the shared wording", () => {
     expect(ALREADY_LISTED_MESSAGE).toBe("You already list this. Edit your existing listing.");
+  });
+});
+
+describe("a brand typed under Not in the list", () => {
+  const typed = (name: string, over: Partial<BatteryPick> = {}) => picked({ brandId: null, brandName: name, ...over });
+  const synced = { id: "l2", status: "PENDING", brand_id: "b-new", brand: "Fengli", size_id: "s60", size_code: "NS60", terminal: "LEFT" } as BatteryListing;
+  it("finds a synced listing of the same typed brand, whatever brand id the server gave it", () => {
+    expect(findExistingBattery([synced], typed(" fengli "))?.id).toBe("l2");
+    expect(findExistingBattery([synced], typed("Fengli", { terminal: "RIGHT" }))).toBeNull();
+  });
+  it("a typed name equal to a listed brand is that brand, so its figures come from the list", () => {
+    const resolved = resolveTypedBrand(catalog, typed("varta"));
+    expect(resolved).toMatchObject({ brandId: "b-varta", brandName: "" });
+    expect(withCatalogFigures(catalog, resolved)).toMatchObject({ capacityAh: "45", type: "MF" });
+    expect(resolveTypedBrand(catalog, typed("Fengli"))).toEqual(typed("Fengli"));
+    expect(resolveTypedBrand(catalog, picked())).toEqual(picked());
+  });
+  it("finds the listing of a listed brand typed in lower case", () => {
+    const row = { id: "l1", status: "APPROVED", brand_id: "b-varta", brand: "Varta", size_id: "s60", terminal: "LEFT" } as BatteryListing;
+    expect(findExistingBattery([row], resolveTypedBrand(catalog, typed("varta")))?.id).toBe("l1");
   });
 });

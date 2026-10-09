@@ -7,7 +7,7 @@ import { cacheBatteryCatalog, getBatteryListings, getCachedBatteryCatalog, type 
 import { batteryCatalogApi, type ApiBatteryCatalog } from "@/lib/api";
 import {
   ALREADY_LISTED_MESSAGE, NOT_LISTED, batteryListingTitle, batteryPickProblem, brandOptions, catalogProductFor, emptyBatteryPick,
-  findExistingBattery, pickBrand, pickSize, pickTerminal, reconcileBatteryPick, warrantyProblem, withCatalogFigures, type BatteryPick,
+  findExistingBattery, pickBrand, pickSize, pickTerminal, reconcileBatteryPick, resolveTypedBrand, warrantyProblem, withCatalogFigures, type BatteryPick,
 } from "@/lib/battery-form";
 import { listingNote } from "@/lib/listing-note";
 import { newLocalId, saveBatteryListing } from "@/lib/listings";
@@ -63,12 +63,14 @@ export default function AddEditBatteryListingScreen(): React.JSX.Element {
   }, [catalog, existing]);
   const set = (p: Partial<BatteryPick>) => setPick((prev) => (catalog ? withCatalogFigures(catalog, { ...prev, ...p }) : { ...prev, ...p }));
   const applyPick = <V,>(fn: (p: BatteryPick, v: V) => BatteryPick, v: V) => setPick((prev) => (catalog ? withCatalogFigures(catalog, fn(prev, v)) : fn(prev, v)));
-  const known = catalog ? catalogProductFor(catalog, pick) : null;
-  const brandName = pick.brandId ? catalog?.brands.find((b) => b.id === pick.brandId)?.name ?? "" : pick.brandName;
+  // A brand typed under "Not in the list" that is in the list counts as that brand.
+  const eff = catalog ? withCatalogFigures(catalog, resolveTypedBrand(catalog, pick)) : pick;
+  const known = catalog ? catalogProductFor(catalog, eff) : null;
+  const brandName = eff.brandId ? catalog?.brands.find((b) => b.id === eff.brandId)?.name ?? "" : eff.brandName;
   const sizeCode = catalog?.sizes.find((s) => s.id === pick.sizeId)?.code ?? "";
   const typeName = catalog?.types.find((t) => t.value === pick.type)?.label ?? "";
   const sideName = catalog?.terminals.find((t) => t.value === pick.terminal)?.label ?? "";
-  const newBattery = !known && !!pick.sizeId && !!pick.terminal && (!!pick.brandId || pick.brandName.trim().length >= 2);
+  const newBattery = !known && !!eff.sizeId && !!eff.terminal && (!!eff.brandId || eff.brandName.trim().length >= 2);
   const maxWarranty = catalog?.warrantyMaxMonths ?? 60;
   const note = existing ? listingNote(existing) ?? priceNote(parsePriceAdvice(existing.price_advice)) : null;
 
@@ -76,7 +78,7 @@ export default function AddEditBatteryListingScreen(): React.JSX.Element {
     const priceGhs = parseInt(price, 10);
     if (!existing) {
       if (!catalog) { Alert.alert("Not ready", "The battery list hasn't loaded yet. Connect to the internet once, then try again."); return; }
-      const problem = batteryPickProblem(catalog, pick);
+      const problem = batteryPickProblem(catalog, eff);
       if (problem) { Alert.alert("Check the battery", problem); return; }
     } else {
       const problem = warrantyProblem(pick.warranty, maxWarranty);
@@ -88,7 +90,7 @@ export default function AddEditBatteryListingScreen(): React.JSX.Element {
     try {
       if (!existing) {
         // Already on this vendor's list (same brand, size and side): take them to it instead of adding a copy.
-        const dup = findExistingBattery(await getBatteryListings(), pick);
+        const dup = findExistingBattery(await getBatteryListings(), eff);
         if (dup) {
           Alert.alert("Already listed", ALREADY_LISTED_MESSAGE);
           nav.replace("AddEditBatteryListing", { listing: dup });
@@ -102,8 +104,8 @@ export default function AddEditBatteryListingScreen(): React.JSX.Element {
             price_advice: existing.price_ghs === priceGhs ? existing.price_advice : null, updated_at: now }
         : {
             id: newLocalId(), server_id: null, battery_product_id: known?.id ?? null,
-            brand_id: pick.brandId, brand: brandName.trim(), size_id: pick.sizeId, size_code: sizeCode, terminal: pick.terminal,
-            battery_type: pick.type, voltage: pick.voltage, capacity_ah: parseInt(pick.capacityAh, 10), cca: pick.cca.trim() ? parseInt(pick.cca, 10) : null,
+            brand_id: eff.brandId, brand: brandName.trim(), size_id: eff.sizeId, size_code: sizeCode, terminal: eff.terminal,
+            battery_type: eff.type, voltage: eff.voltage, capacity_ah: parseInt(eff.capacityAh, 10), cca: eff.cca.trim() ? parseInt(eff.cca, 10) : null,
             warranty_months: warrantyMonths, status: "LOCAL", review_status: "OK", hidden: 0, hidden_reason: null, rejected_reason: null,
             price_ghs: priceGhs, photos: JSON.stringify(photos.urls), in_stock: inStock ? 1 : 0, price_advice: null, updated_at: now,
           };
@@ -139,6 +141,9 @@ export default function AddEditBatteryListingScreen(): React.JSX.Element {
           {typedBrand ? (
             <FormField label="Brand, as written on the battery *">
               <FormInput value={pick.brandName} onChangeText={(t) => set({ brandName: t, genuine: false })} placeholder="e.g. Fengli" accessibilityLabel="Brand" autoCapitalize="words" />
+              <TouchableOpacity onPress={() => { setPick((p) => pickBrand(p, null)); setTypedBrand(false); }} accessibilityRole="button" accessibilityLabel="Choose the brand from the list">
+                <ReusableText text="Choose from the list" family="medium" size={12} color={C.primary} />
+              </TouchableOpacity>
             </FormField>
           ) : select("Brand *", brandName, "Choose the brand", "brand")}
           {select("Size code *", sizeCode, "e.g. NS60, 55D23, DIN 66", "size")}
@@ -147,7 +152,7 @@ export default function AddEditBatteryListingScreen(): React.JSX.Element {
             <ReusableText text={`${known.voltage}V · ${known.capacityAh}Ah${known.cca ? ` · ${known.cca} CCA` : ""} · ${catalog?.types.find((t) => t.value === known.type)?.label ?? known.type}`}
               family="medium" size={13} color={C.secondary} />
           ) : null}
-          {newBattery || typedBrand ? (
+          {newBattery || (typedBrand && !eff.brandId) ? (
             <>
               <ReusableText text="This battery isn't in our list yet. Enter what its label says. We'll check it, and customers see it once it's approved." family="regular" size={11} color={C.gray2} />
               <HeightSpacer height={8} />

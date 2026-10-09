@@ -31,6 +31,15 @@ export const pickSize = (p: BatteryPick, sizeId: string): BatteryPick => clearFi
 /** A new side clears the figures, which belong to one battery. */
 export const pickTerminal = (p: BatteryPick, terminal: BatteryPick["terminal"]): BatteryPick => clearFigures({ ...p, terminal });
 
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** A brand typed under "Not in the list" that is in the list is that brand: no label figures are asked for. */
+export function resolveTypedBrand(c: ApiBatteryCatalog, p: BatteryPick): BatteryPick {
+  if (p.brandId || !p.brandName.trim()) return p;
+  const brand = c.brands.find((b) => same(b.name, p.brandName));
+  return brand ? { ...p, brandId: brand.id, brandName: "" } : p;
+}
+
 export function catalogProductFor(c: ApiBatteryCatalog, p: BatteryPick): ApiBatteryCatalog["products"][number] | null {
   if (!p.brandId || !p.sizeId || !p.terminal) return null;
   return c.products.find((x) => x.brandId === p.brandId && x.sizeId === p.sizeId && x.terminal === p.terminal) ?? null;
@@ -83,13 +92,13 @@ export function reconcileBatteryPick(c: ApiBatteryCatalog, p: BatteryPick): Batt
   return next;
 }
 
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** The vendor's own live listing of exactly this battery, so a duplicate sends them to edit it instead. */
 export function findExistingBattery(rows: readonly BatteryListing[], p: BatteryPick): BatteryListing | null {
   return rows.find((r) =>
     r.status !== "REJECTED" && r.size_id === p.sizeId && r.terminal === p.terminal
-    && (p.brandId ? r.brand_id === p.brandId : r.brand_id === null && same(r.brand, p.brandName)),
+    // A typed brand matches by name: once synced, the row carries the new brand's id.
+    && (p.brandId ? r.brand_id === p.brandId : same(r.brand, p.brandName)),
   ) ?? null;
 }
 
