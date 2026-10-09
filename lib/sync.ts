@@ -1,10 +1,13 @@
 import {
   api,
+  batteryCatalogApi,
+  batteryListingsApi,
   fluidCatalogApi,
   fluidListingsApi,
   lightListingsApi,
   tyreCatalogApi,
   tyreListingsApi,
+  type ApiBatteryListing,
   type ApiFluidListing,
   type ApiLightListing,
   type ApiTyreListing,
@@ -13,6 +16,7 @@ import { ApiError, failureAction, isApiError } from "./api-error";
 import { getToken } from "./auth";
 import {
   applyLocalStage,
+  cacheBatteryCatalog,
   cacheFluidCatalog,
   cacheTyreCatalog,
   deleteAssignment,
@@ -26,6 +30,7 @@ import {
   getPendingDeclines,
   getPendingListingOps,
   markFluidRejected,
+  markListingRejected,
   getPendingQuotes,
   getPendingStages,
   markDeclineError,
@@ -41,11 +46,13 @@ import {
   pruneOrders,
   upsertAssignment,
   upsertAssignments,
+  upsertBatteryListing,
   upsertFluidListing,
   upsertLightListing,
   upsertOrders,
   upsertTyreListing,
   type Assignment,
+  type BatteryListing,
   type FluidListing,
   type LightListing,
   type ListingKind,
@@ -53,7 +60,7 @@ import {
   type TyreListing,
 } from "./db";
 import { createLogger } from "./logger";
-import { mapAssignment, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, type ApiAssignment, type ApiOrder } from "./mappers";
+import { mapAssignment, mapBattery, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, type ApiAssignment, type ApiOrder } from "./mappers";
 import { uploadLocalPhotos } from "./upload";
 
 const log = createLogger("sync");
@@ -189,6 +196,18 @@ export async function applyFluidListings({ listings }: { listings: ApiFluidListi
   log.debug("applyFluidListings", { count: listings.length });
 }
 
+export async function applyBatteryListings({ listings }: { listings: ApiBatteryListing[] }): Promise<void> {
+  // Pending rows are skipped and never pruned; REJECTED rows have no server copy, so pruneListings must keep them.
+  const pending = await getListingIdsWithPendingOps("battery");
+  for (const l of listings) {
+    if (pending.has(l.id)) continue;
+    await upsertBatteryListing(mapBattery(l));
+    await deleteDuplicateListings("battery", l.id, l.id);
+  }
+  await pruneListings("battery", new Set(listings.map((l) => l.id)), pending);
+  log.debug("applyBatteryListings", { count: listings.length });
+}
+
 export async function pullTyreCatalog(): Promise<void> {
   const { brands } = await tyreCatalogApi.get();
   await cacheTyreCatalog(brands);
@@ -290,6 +309,8 @@ type ListingFlushConfig<TRow, TApi> = {
   existingIdOf?: (err: unknown) => string | null;
   /** A create the server refused for good: keep the local row, marked with the reason. */
   rejectCreate?: (localId: string, reason: string) => Promise<void>;
+  /** Extra typed fields to carry onto the adopted listing (beyond price, photos and stock). */
+  adoptFields?: string[];
 };
 
 const TYRE_FLUSH: ListingFlushConfig<TyreListing, ApiTyreListing> = {
@@ -327,6 +348,25 @@ const FLUID_FLUSH: ListingFlushConfig<FluidListing, ApiFluidListing> = {
   },
 };
 
+const existingListingId = (err: unknown): string | null => {
+  const body = isApiError(err) && err.status === 409 ? (err.body as { code?: unknown; listingId?: unknown } | undefined) : undefined;
+  return body?.code === "ALREADY_LISTED" && typeof body.listingId === "string" ? body.listingId : null;
+};
+
+// Lazy wrappers: the API object is resolved at call time, so a test's partial mock of ../lib/api still loads.
+const BATTERY_FLUSH: ListingFlushConfig<BatteryListing, ApiBatteryListing> = {
+  kind: "battery",
+  create: (b) => batteryListingsApi.create(b),
+  update: (id, b) => batteryListingsApi.update(id, b),
+  remove: (id) => batteryListingsApi.delete(id),
+  toRow: mapBattery,
+  upsert: upsertBatteryListing,
+  rejectCreate: (id, reason) => markListingRejected("battery", id, reason),
+  idOf: (l) => l.id,
+  existingIdOf: existingListingId,
+  adoptFields: ["warrantyMonths"],
+};
+
 async function flushListingItem<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>, item: ListingQueueItem): Promise<void> {
   const payload = JSON.parse(item.payload) as Record<string, unknown> & { server_id?: string | null; photos?: string[] };
   const { server_id, ...body } = payload;
@@ -359,7 +399,8 @@ async function flushListingItem<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>,
       // (never the product). Queued ahead of any edits that were waiting behind this create.
       await enqueueListingOp(cfg.kind, {
         id: `${item.id}-existing`, op: "update", listing_id: existing, synced: 0, error: null, created_at: item.created_at,
-        payload: JSON.stringify({ server_id: existing, priceGhs: body.priceGhs, photos, inStock: body.inStock }),
+        payload: JSON.stringify({ server_id: existing, priceGhs: body.priceGhs, photos, inStock: body.inStock,
+          ...Object.fromEntries((cfg.adoptFields ?? []).map((f) => [f, body[f]])) }),
       });
       return;
     }
@@ -425,6 +466,7 @@ async function pushListingQueue<TRow, TApi>(cfg: ListingFlushConfig<TRow, TApi>)
 export const pushPendingTyreListings = () => pushListingQueue(TYRE_FLUSH);
 export const pushPendingLightListings = () => pushListingQueue(LIGHT_FLUSH);
 export const pushPendingFluidListings = () => pushListingQueue(FLUID_FLUSH);
+export const pushPendingBatteryListings = () => pushListingQueue(BATTERY_FLUSH);
 
 // ─── Orchestration ───────────────────────────────────────────────────────────
 
@@ -457,9 +499,10 @@ export async function sync(): Promise<SyncResult> {
   await pushPendingTyreListings().catch(note("pushTyres"));
   await pushPendingLightListings().catch(note("pushLights"));
   await pushPendingFluidListings().catch(note("pushFluids"));
+  await pushPendingBatteryListings().catch(note("pushBatteries"));
 
   // Network in parallel, database writes in sequence (single SQLite connection).
-  const [assignments, orders, tyres, lights, catalog, fluids, fluidCatalog] = await Promise.allSettled([
+  const [assignments, orders, tyres, lights, catalog, fluids, fluidCatalog, batteries, batteryCatalog] = await Promise.allSettled([
     fetchAssignments(),
     fetchOrders(),
     tyreListingsApi.getAll(),
@@ -467,6 +510,8 @@ export async function sync(): Promise<SyncResult> {
     tyreCatalogApi.get(),
     fluidListingsApi.getAll(),
     fluidCatalogApi.get(),
+    batteryListingsApi.getAll(),
+    batteryCatalogApi.get(),
   ]);
 
   let assignmentsOk = true;
@@ -482,6 +527,8 @@ export async function sync(): Promise<SyncResult> {
   if (catalog.status === "fulfilled") await cacheTyreCatalog(catalog.value.brands).catch(note("cacheCatalog")); else note("fetchCatalog")(catalog.reason);
   if (fluids.status === "fulfilled") await applyFluidListings(fluids.value).catch(note("applyFluids")); else note("fetchFluids")(fluids.reason);
   if (fluidCatalog.status === "fulfilled") await cacheFluidCatalog(fluidCatalog.value).catch(note("cacheFluidCatalog")); else note("fetchFluidCatalog")(fluidCatalog.reason);
+  if (batteries.status === "fulfilled") await applyBatteryListings(batteries.value).catch(note("applyBatteries")); else note("fetchBatteries")(batteries.reason);
+  if (batteryCatalog.status === "fulfilled") await cacheBatteryCatalog(batteryCatalog.value).catch(note("cacheBatteryCatalog")); else note("fetchBatteryCatalog")(batteryCatalog.reason);
 
   if (!assignmentsOk) return { ok: false, error: firstError };
   return { ok: true, error: firstError };
