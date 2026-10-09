@@ -5,7 +5,7 @@ const anyFn = (fallback: unknown) => new Proxy({} as Record<string, jest.Mock>, 
 });
 jest.mock("../lib/db", () => {
   const stub = anyFn([]);
-  return new Proxy({ cacheCatalog: jest.fn(), getCachedCatalog: jest.fn(async () => null) } as Record<string, unknown>, {
+  return new Proxy({ cacheCatalog: jest.fn(), getCachedCatalog: jest.fn(async () => null), getCatalogEtag: jest.fn(async () => null) } as Record<string, unknown>, {
     get: (t, k: string) => (k in t ? t[k] : stub[k]),
   });
 });
@@ -31,7 +31,7 @@ const cars = { list: "LIVE", version: "c1", makes: [] };
 
 beforeEach(() => {
   mocked(db.cacheCatalog).mockReset();
-  mocked(db.getCachedCatalog).mockReset().mockResolvedValue(null);
+  mocked(db.getCatalogEtag).mockReset().mockResolvedValue(null);
   mocked(partsCatalogApi.get).mockReset().mockResolvedValue({ status: 200, body: parts, etag: '"p1"' });
   mocked(carListApi.get).mockReset().mockResolvedValue({ status: 200, body: cars, etag: '"c1"' });
 });
@@ -45,12 +45,12 @@ describe("sync and the shared catalogs", () => {
   });
 
   it("writes nothing on 304 and keeps the last good copy when a fetch fails, and the other catalog still lands", async () => {
-    mocked(db.getCachedCatalog).mockResolvedValue({ value: parts, etag: '"p1"' });
+    mocked(db.getCatalogEtag).mockImplementation(async (t: string) => (t === "parts_catalog_cache" ? '"p1"' : '"c1"'));
     mocked(partsCatalogApi.get).mockRejectedValue(Object.assign(new Error("offline"), { status: 0 }));
     mocked(carListApi.get).mockResolvedValue({ status: 304 });
     const result = await sync();
     expect(partsCatalogApi.get).toHaveBeenCalledWith('"p1"');
-    expect(carListApi.get).toHaveBeenCalledWith('"p1"');
+    expect(carListApi.get).toHaveBeenCalledWith('"c1"');
     expect(db.cacheCatalog).not.toHaveBeenCalled();
     expect(result.ok).toBe(true); // the inbox is what fails a pass, not a catalog
     expect((result.error as Error).message).toBe("offline");

@@ -867,6 +867,13 @@ export async function cacheCatalog(table: CatalogCacheTable, value: unknown, eta
   await db.runAsync(`INSERT OR REPLACE INTO ${table} (id, json, etag, updated_at) VALUES (1, ?, ?, ?)`, [JSON.stringify(value), etag, new Date().toISOString()]);
 }
 
+/** Just the stored ETag: a sync asks every 30 s, and must not parse the whole document to learn it. */
+export async function getCatalogEtag(table: CatalogCacheTable): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ etag: string | null }>(`SELECT etag FROM ${table} WHERE id = 1`);
+  return row?.etag ?? null;
+}
+
 export async function getCachedCatalog<T>(table: CatalogCacheTable): Promise<{ value: T; etag: string | null } | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ json: string; etag: string | null }>(`SELECT json, etag FROM ${table} WHERE id = 1`);
