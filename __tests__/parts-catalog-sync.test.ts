@@ -1,24 +1,24 @@
 // The parts list and the car list are cached offline with their ETag: a first sync stores them, a
 // later sync sends the ETag and stores nothing on 304, and a failed fetch keeps the last good copy.
-// Asking for the ETag never parses the cached document, and a parsed document is kept in memory until a write.
+// Asking for the ETag never parses the cached document; a parsed document is kept in memory, a write
+// replaces it (even while a read is in flight), and logout forgets it.
 jest.mock("../lib/db", () => ({ cacheCatalog: jest.fn(), getCachedCatalog: jest.fn(), getCatalogEtag: jest.fn() }));
 jest.mock("../lib/api", () => ({ partsCatalogApi: { get: jest.fn() }, carListApi: { get: jest.fn() } }));
 
 import * as db from "../lib/db";
 import { carListApi, partsCatalogApi } from "../lib/api";
 import { fetchCarList, fetchPartsCatalog, loadCarList, loadPartsCatalog, storeCarList, storePartsCatalog } from "../lib/parts-list";
+import { forgetCatalogs } from "../lib/catalog-memory";
 
 const mocked = (f: unknown) => f as jest.Mock;
 const parts = { list: "LIVE" as const, version: "p1", groups: [], parts: [] };
 const parts2 = { list: "LIVE" as const, version: "p2", groups: [], parts: [] };
 const cars = { list: "LIVE" as const, version: "c1", makes: [] };
 
-// The module keeps parsed catalogs in memory; a write clears them, so each test starts from a write.
-beforeEach(async () => {
+// The parsed catalogs live in memory across tests; each test starts as after a logout.
+beforeEach(() => {
   jest.resetAllMocks();
-  await storePartsCatalog({ status: 200, body: parts, etag: null });
-  await storeCarList({ status: 200, body: cars, etag: null });
-  jest.resetAllMocks();
+  forgetCatalogs();
 });
 
 describe("the parts list cache", () => {
@@ -54,22 +54,47 @@ describe("the parts list cache", () => {
   it("reads the cached list offline, and null before the first sync", async () => {
     mocked(db.getCachedCatalog).mockResolvedValue({ value: parts, etag: '"p1"' });
     expect(await loadPartsCatalog()).toEqual(parts);
-    await storePartsCatalog({ status: 200, body: parts, etag: '"p1"' }); // clears the memory copy
+    forgetCatalogs();
     mocked(db.getCachedCatalog).mockResolvedValue(null);
     expect(await loadPartsCatalog()).toBeNull();
   });
 
-  it("parses the stored list once, and reads it again only after a write", async () => {
+  it("parses the stored list once, and a write replaces the copy in memory", async () => {
     mocked(db.getCachedCatalog).mockResolvedValue({ value: parts, etag: '"p1"' });
     expect(await loadPartsCatalog()).toBe(await loadPartsCatalog());
     expect(db.getCachedCatalog).toHaveBeenCalledTimes(1);
 
-    mocked(db.getCachedCatalog).mockResolvedValue({ value: parts2, etag: '"p2"' });
     await storePartsCatalog({ status: 304 }); // nothing written, the copy in memory stays
     expect(await loadPartsCatalog()).toEqual(parts);
     await storePartsCatalog({ status: 200, body: parts2, etag: '"p2"' });
     expect(await loadPartsCatalog()).toEqual(parts2);
-    expect(db.getCachedCatalog).toHaveBeenCalledTimes(2);
+    expect(db.getCachedCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the new list when a read of the old row races the sync's write", async () => {
+    let finishRead!: (row: { value: typeof parts; etag: string }) => void;
+    mocked(db.getCachedCatalog).mockReturnValueOnce(new Promise((resolve) => { finishRead = resolve; }));
+    const reading = loadPartsCatalog();
+    await storePartsCatalog({ status: 200, body: parts2, etag: '"p2"' });
+    finishRead({ value: parts, etag: '"p1"' }); // the old row, read before the write landed
+    expect(await reading).toEqual(parts2);
+    expect(await loadPartsCatalog()).toEqual(parts2);
+    expect(db.getCachedCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets the parsed list on logout, also when a read was in flight", async () => {
+    await storePartsCatalog({ status: 200, body: parts, etag: '"p1"' });
+    forgetCatalogs();
+    mocked(db.getCachedCatalog).mockResolvedValue(null);
+    expect(await loadPartsCatalog()).toBeNull();
+
+    let finishRead!: (row: { value: typeof parts; etag: string }) => void;
+    mocked(db.getCachedCatalog).mockReturnValueOnce(new Promise((resolve) => { finishRead = resolve; }));
+    const reading = loadPartsCatalog();
+    forgetCatalogs();
+    finishRead({ value: parts, etag: '"p1"' });
+    expect(await reading).toBeNull();
+    expect(await loadPartsCatalog()).toBeNull();
   });
 });
 

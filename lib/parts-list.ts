@@ -3,14 +3,14 @@
 //
 // A refresh is two steps so the sync can keep to one database writer: fetch* only talks to the network
 // (it reads the stored ETag first) and runs in the sync's parallel pull phase; store* writes afterwards.
-// The parsed documents are kept in memory (about 130 KB for the parts list) until the next write.
+// The parsed documents are kept in memory (about 130 KB for the parts list, lib/catalog-memory.ts); a write
+// replaces them and logout forgets them.
 import { carListApi, partsCatalogApi, type ApiCarList, type EtagResult } from "./api";
+import { readToken, rememberRead, rememberWrite, remembered } from "./catalog-memory";
 import { cacheCatalog, getCachedCatalog, getCatalogEtag, type CatalogCacheTable } from "./db";
 import type { PartsCatalog } from "./parts-search.generated";
 
 export { findPartExact, positionTypeFor, searchParts } from "./parts-search.generated";
-
-const memory = new Map<CatalogCacheTable, unknown>();
 
 async function fetchCatalog<T>(table: CatalogCacheTable, get: (etag: string | null) => Promise<EtagResult<T>>): Promise<EtagResult<T>> {
   return get(await getCatalogEtag(table));
@@ -20,14 +20,14 @@ async function fetchCatalog<T>(table: CatalogCacheTable, get: (etag: string | nu
 async function storeCatalog<T>(table: CatalogCacheTable, res: EtagResult<T>): Promise<void> {
   if (res.status !== 200) return;
   await cacheCatalog(table, res.body, res.etag);
-  memory.delete(table);
+  rememberWrite(table, res.body);
 }
 
 async function loadCatalog<T>(table: CatalogCacheTable): Promise<T | null> {
-  if (memory.has(table)) return memory.get(table) as T;
-  const cached = await getCachedCatalog<T>(table);
-  if (cached) memory.set(table, cached.value);
-  return cached?.value ?? null;
+  const hit = remembered<T>(table);
+  if (hit !== undefined) return hit;
+  const token = readToken();
+  return rememberRead(table, (await getCachedCatalog<T>(table))?.value ?? null, token);
 }
 
 export const fetchPartsCatalog = () => fetchCatalog("parts_catalog_cache", partsCatalogApi.get);

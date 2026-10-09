@@ -26,6 +26,7 @@ jest.mock("expo-sqlite", () => {
 jest.mock("../lib/logger", () => ({ createLogger: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }) }));
 
 import { cacheCatalog, clearAllData, getCachedCatalog, getCatalogEtag, getDb } from "../lib/db";
+import { rememberWrite, remembered } from "../lib/catalog-memory";
 
 describe("catalog cache in SQLite", () => {
   it("migrates to v8 and starts empty", async () => {
@@ -61,9 +62,14 @@ describe("catalog cache in SQLite", () => {
   it("is wiped on logout with everything else", async () => {
     await cacheCatalog("parts_catalog_cache", { version: "a" }, '"a"');
     await cacheCatalog("car_list_cache", { version: "c" }, '"c"');
+    rememberWrite("parts_catalog_cache", { version: "a" });
+    rememberWrite("car_list_cache", { version: "c" });
     await clearAllData();
     expect(await getCachedCatalog("parts_catalog_cache")).toBeNull();
     expect(await getCachedCatalog("car_list_cache")).toBeNull();
+    // The parsed copies in memory go too, so the app never serves a list SQLite no longer holds.
+    expect(remembered("parts_catalog_cache")).toBeUndefined();
+    expect(remembered("car_list_cache")).toBeUndefined();
   });
 });
 

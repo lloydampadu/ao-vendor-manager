@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import type { ApiBatteryCatalog, ApiFluidCatalog } from "./api";
+import { forgetCatalogs } from "./catalog-memory";
 import { createLogger } from "./logger";
 
 const log = createLogger("db");
@@ -459,6 +460,8 @@ export async function clearAllData(): Promise<void> {
       await db.runAsync(`DELETE FROM ${table}`);
     }
   });
+  // The parsed lists in memory (lib/parts-list.ts) go with their tables.
+  forgetCatalogs();
 }
 
 // ─── Assignments ─────────────────────────────────────────────────────────────
