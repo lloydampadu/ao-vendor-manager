@@ -1,5 +1,5 @@
 import * as SQLite from "expo-sqlite";
-import type { ApiFluidCatalog } from "./api";
+import type { ApiBatteryCatalog, ApiFluidCatalog } from "./api";
 import { createLogger } from "./logger";
 
 const log = createLogger("db");
@@ -112,6 +112,32 @@ export type FluidListing = {
   hidden: number; // 1 = taken down by AbosseyOkai Direct
   hidden_reason: string | null;
   rejected_reason: string | null; // set (with status "REJECTED") when the server refused the create for good
+  price_ghs: number;
+  photos: string; // JSON string[]
+  in_stock: number;
+  price_advice: string | null; // JSON { lowestGhs, maxGhs } from the server, or null
+  updated_at: string;
+};
+
+export type BatteryListing = {
+  id: string;
+  server_id: string | null;
+  battery_product_id: string | null; // null until the server resolves the pick
+  brand_id: string | null; // null = typed ("Not in the list")
+  brand: string;
+  size_id: string;
+  size_code: string;
+  terminal: string; // "LEFT" | "RIGHT"
+  battery_type: string;
+  voltage: number;
+  capacity_ah: number;
+  cca: number | null;
+  warranty_months: number;
+  status: string; // "APPROVED" | "PENDING" (server) | "LOCAL" (not sent yet) | "REJECTED"
+  review_status: string; // "OK" | "PRICE_CHECK"
+  hidden: number; // 1 = taken down by AbosseyOkai Direct
+  hidden_reason: string | null;
+  rejected_reason: string | null;
   price_ghs: number;
   photos: string; // JSON string[]
   in_stock: number;
@@ -326,6 +352,51 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_fluid_queue_synced ON fluid_listing_queue(synced, created_at);
   CREATE INDEX IF NOT EXISTS idx_fluid_listings_server ON fluid_listings(server_id);
   `,
+  // v7 — battery listings, offline-first like fluids, and the cached battery catalog. Has the review,
+  // hidden and rejected columns from the start (plan 2a lesson: vendors must see why a listing is held).
+  `
+  CREATE TABLE IF NOT EXISTS battery_listings (
+    id TEXT PRIMARY KEY,
+    server_id TEXT,
+    battery_product_id TEXT,
+    brand_id TEXT,
+    brand TEXT NOT NULL,
+    size_id TEXT NOT NULL,
+    size_code TEXT NOT NULL,
+    terminal TEXT NOT NULL,
+    battery_type TEXT NOT NULL,
+    voltage INTEGER NOT NULL DEFAULT 12,
+    capacity_ah INTEGER NOT NULL,
+    cca INTEGER,
+    warranty_months INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'LOCAL',
+    review_status TEXT NOT NULL DEFAULT 'OK',
+    hidden INTEGER NOT NULL DEFAULT 0,
+    hidden_reason TEXT,
+    rejected_reason TEXT,
+    price_ghs INTEGER NOT NULL,
+    photos TEXT NOT NULL DEFAULT '[]',
+    in_stock INTEGER NOT NULL DEFAULT 1,
+    price_advice TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS battery_listing_queue (
+    id TEXT PRIMARY KEY,
+    op TEXT NOT NULL,
+    listing_id TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    synced INTEGER DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS battery_catalog_cache (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_battery_queue_synced ON battery_listing_queue(synced, created_at);
+  CREATE INDEX IF NOT EXISTS idx_battery_listings_server ON battery_listings(server_id);
+  `,
 ];
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -377,6 +448,7 @@ export async function clearAllData(): Promise<void> {
       "assignments", "quote_queue", "decline_queue", "products_cache", "tyre_catalog_cache",
       "orders", "stage_queue", "tyre_listings", "tyre_listing_queue", "light_listings", "light_listing_queue",
       "fluid_listings", "fluid_listing_queue", "fluid_catalog_cache",
+      "battery_listings", "battery_listing_queue", "battery_catalog_cache",
     ]) {
       await db.runAsync(`DELETE FROM ${table}`);
     }
@@ -678,7 +750,7 @@ export async function markStageError(id: string, error: string): Promise<void> {
 // Both listing kinds are offline-first: a local row keyed by a temporary
 // "local-…" id until the create flushes, then re-keyed to the server id.
 
-export type ListingKind = "tyre" | "light" | "fluid";
+export type ListingKind = "tyre" | "light" | "fluid" | "battery";
 
 type ListingTables = { rows: string; queue: string };
 
@@ -686,6 +758,7 @@ const LISTING_TABLES: Record<ListingKind, ListingTables> = {
   tyre: { rows: "tyre_listings", queue: "tyre_listing_queue" },
   light: { rows: "light_listings", queue: "light_listing_queue" },
   fluid: { rows: "fluid_listings", queue: "fluid_listing_queue" },
+  battery: { rows: "battery_listings", queue: "battery_listing_queue" },
 };
 
 export async function upsertTyreListing(t: TyreListing): Promise<void> {
@@ -727,11 +800,7 @@ export async function upsertFluidListing(l: FluidListing): Promise<void> {
   );
 }
 
-/** The server refused this never-synced listing for good: keep the row, say why, let the vendor delete it. */
-export async function markFluidRejected(id: string, reason: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(`UPDATE fluid_listings SET status = 'REJECTED', rejected_reason = ? WHERE id = ? AND server_id IS NULL`, [reason, id]);
-}
+export const markFluidRejected = (id: string, reason: string): Promise<void> => markListingRejected("fluid", id, reason);
 
 export async function getFluidListings(): Promise<FluidListing[]> {
   const db = await getDb();
@@ -748,6 +817,41 @@ export async function getCachedFluidCatalog(): Promise<ApiFluidCatalog | null> {
   const row = await db.getFirstAsync<{ json: string }>(`SELECT json FROM fluid_catalog_cache WHERE id = 1`);
   if (!row) return null;
   try { return JSON.parse(row.json) as ApiFluidCatalog; } catch { return null; }
+}
+
+const BATTERY_COLS = ["id", "server_id", "battery_product_id", "brand_id", "brand", "size_id", "size_code", "terminal", "battery_type", "voltage", "capacity_ah", "cca",
+  "warranty_months", "status", "review_status", "hidden", "hidden_reason", "rejected_reason", "price_ghs", "photos", "in_stock", "price_advice", "updated_at"] as const;
+
+export async function upsertBatteryListing(l: BatteryListing): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO battery_listings (${BATTERY_COLS.join(", ")}) VALUES (${BATTERY_COLS.map(() => "?").join(", ")})
+     ON CONFLICT(id) DO UPDATE SET ${BATTERY_COLS.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ")}`,
+    BATTERY_COLS.map((c) => l[c]),
+  );
+}
+
+export async function getBatteryListings(): Promise<BatteryListing[]> {
+  const db = await getDb();
+  return db.getAllAsync<BatteryListing>(`SELECT * FROM battery_listings ORDER BY updated_at DESC`);
+}
+
+/** The server refused this never-synced listing for good: keep the row, say why, let the vendor delete it. */
+export async function markListingRejected(kind: "fluid" | "battery", id: string, reason: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE ${LISTING_TABLES[kind].rows} SET status = 'REJECTED', rejected_reason = ? WHERE id = ? AND server_id IS NULL`, [reason, id]);
+}
+
+export async function cacheBatteryCatalog(c: ApiBatteryCatalog): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`INSERT OR REPLACE INTO battery_catalog_cache (id, json, updated_at) VALUES (1, ?, ?)`, [JSON.stringify(c), new Date().toISOString()]);
+}
+
+export async function getCachedBatteryCatalog(): Promise<ApiBatteryCatalog | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ json: string }>(`SELECT json FROM battery_catalog_cache WHERE id = 1`);
+  if (!row) return null;
+  try { return JSON.parse(row.json) as ApiBatteryCatalog; } catch { return null; }
 }
 
 export async function getTyreListings(): Promise<TyreListing[]> {
@@ -833,6 +937,7 @@ export async function countPendingWrites(): Promise<number> {
       (SELECT COUNT(*) FROM stage_queue WHERE synced = 0) +
       (SELECT COUNT(*) FROM tyre_listing_queue WHERE synced = 0) +
       (SELECT COUNT(*) FROM light_listing_queue WHERE synced = 0) +
-      (SELECT COUNT(*) FROM fluid_listing_queue WHERE synced = 0) AS n`);
+      (SELECT COUNT(*) FROM fluid_listing_queue WHERE synced = 0) +
+      (SELECT COUNT(*) FROM battery_listing_queue WHERE synced = 0) AS n`);
   return row?.n ?? 0;
 }

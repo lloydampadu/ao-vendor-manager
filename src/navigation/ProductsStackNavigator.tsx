@@ -5,8 +5,9 @@ import AddProductScreen from "../screens/AddProductScreen";
 import AddEditTyreListingScreen from "../screens/AddEditTyreListingScreen";
 import AddEditLightListingScreen from "../screens/AddEditLightListingScreen";
 import AddEditFluidListingScreen from "../screens/AddEditFluidListingScreen";
+import AddEditBatteryListingScreen from "../screens/AddEditBatteryListingScreen";
 import AddEditPartListingScreen from "../screens/AddEditPartListingScreen";
-import type { TyreListing, LightListing, FluidListing } from "@/lib/db";
+import type { TyreListing, LightListing, FluidListing, BatteryListing } from "@/lib/db";
 import type { ApiProduct } from "@/lib/api";
 import { useThemeColors } from "../../constants/theme";
 
@@ -16,6 +17,7 @@ export type ProductsStackParamList = {
   AddEditTyreListing: { listing?: TyreListing } | undefined;
   AddEditLightListing: { listing?: LightListing } | undefined;
   AddEditFluidListing: { listing?: FluidListing } | undefined;
+  AddEditBatteryListing: { listing?: BatteryListing } | undefined;
   AddEditPartListing: { category: string; product?: ApiProduct };
 };
 
@@ -50,6 +52,11 @@ export default function ProductsStackNavigator(): React.JSX.Element {
         name="AddEditFluidListing"
         component={AddEditFluidListingScreen}
         options={({ route }) => ({ title: route.params?.listing ? "Edit oil or fluid" : "Add oil or fluid" })}
+      />
+      <Stack.Screen
+        name="AddEditBatteryListing"
+        component={AddEditBatteryListingScreen}
+        options={({ route }) => ({ title: route.params?.listing ? "Edit battery" : "Add battery" })}
       />
       <Stack.Screen
         name="AddEditPartListing"

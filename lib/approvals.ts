@@ -11,6 +11,9 @@ import { TILES } from "./part-tiles";
 export const TYRES = "Tyres";
 export const LAMPS = "Lamps";
 export const OILS_FLUIDS = "Oils & fluids";
+export const BATTERIES = "Batteries";
+/** The catalog part "Battery": a vendor approved for it already sells batteries (the server agrees). */
+export const BATTERY_PART = "Battery";
 
 /** Spelling- and case-insensitive key; must match the server's approvalKey. */
 export function approvalKey(s: string): string {
@@ -31,6 +34,10 @@ export function approvedFluidKinds<K extends { name: string }>(specialties: read
   return kinds.filter((k) => canListFluidKind(specialties, k.name));
 }
 
+export function canListBatteries(specialties: readonly string[]): boolean {
+  return isApproved(specialties, BATTERIES) || isApproved(specialties, BATTERY_PART);
+}
+
 const LAMP_PARTS = PART_CATEGORIES[LAMPS] ?? [];
 
 /** Lamp types the vendor may post: every lamp with "Lamps", else only the approved ones. */
@@ -48,7 +55,7 @@ export type ProductKind = {
   key: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  form: "tyre" | "lamp" | "part" | "fluid";
+  form: "tyre" | "lamp" | "part" | "fluid" | "battery";
   /** PART_CATEGORIES key for part kinds. */
   partCategory?: string;
 };
@@ -66,6 +73,8 @@ export function approvedKinds(specialties: readonly string[], fluidKindNames: re
       if (approvedLampTypes(specialties).length > 0) out.push({ key: "lamps", label: t.label, icon: t.icon, form: "lamp" });
     } else if (t.vendorCategory === "OILS_FLUIDS") {
       if (isApproved(specialties, OILS_FLUIDS) || fluidKindNames.some((k) => isApproved(specialties, k))) out.push({ key: "fluids", label: t.label, icon: t.icon, form: "fluid" });
+    } else if (t.vendorCategory === "BATTERIES") {
+      if (canListBatteries(specialties)) out.push({ key: "batteries", label: t.label, icon: t.icon, form: "battery" });
     } else if (t.partCategory && approvedTypesIn(t.partCategory, specialties).length > 0) {
       out.push({ key: t.partCategory, label: t.label, icon: t.icon, form: "part", partCategory: t.partCategory });
     }
@@ -75,7 +84,7 @@ export function approvedKinds(specialties: readonly string[], fluidKindNames: re
 
 /** Brands don't apply to tyres or oils (they fit any car), so a vendor selling only those skips that step. */
 export function needsBrandsStep(specialties: readonly string[]): boolean {
-  return !(specialties.length > 0 && specialties.every((s) => [TYRES, OILS_FLUIDS].some((x) => approvalKey(s) === approvalKey(x))));
+  return !(specialties.length > 0 && specialties.every((s) => [TYRES, OILS_FLUIDS, BATTERIES].some((x) => approvalKey(s) === approvalKey(x))));
 }
 
 /** The kind to open straight away, only once the cached fluid kinds are read (they can add a second kind). */
@@ -102,6 +111,7 @@ export function requestableSections(specialties: readonly string[], pending: rea
     if (open(TYRES)) sections.push({ title: "Tyres", items: [TYRES] });
     // Asking for the whole family, or for one kind; the family covers every kind, so it hides them once approved.
     if (open(OILS_FLUIDS)) sections.push({ title: OILS_FLUIDS, items: [OILS_FLUIDS, ...fluidKindNames.filter(open)] });
+    if (open(BATTERIES) && !canListBatteries(specialties)) sections.push({ title: BATTERIES, items: [BATTERIES] });
   }
   for (const [title, parts] of Object.entries(PART_CATEGORIES)) {
     if (category && title !== category) continue;
@@ -115,7 +125,7 @@ export function requestableSections(specialties: readonly string[], pending: rea
 
 /** The catalog group an item belongs to (sent with the request), or the item itself for whole kinds. */
 export function groupOf(item: string): string {
-  if (item === TYRES || item === LAMPS || item === OILS_FLUIDS) return item;
+  if (item === TYRES || item === LAMPS || item === OILS_FLUIDS || item === BATTERIES) return item;
   for (const [title, parts] of Object.entries(PART_CATEGORIES)) if (parts.includes(item)) return title;
   return "Other";
 }

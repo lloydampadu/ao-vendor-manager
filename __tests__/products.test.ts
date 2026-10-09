@@ -18,3 +18,17 @@ describe("productSections with fluids", () => {
     expect(productSections([], [], [])).toEqual([]);
   });
 });
+
+import type { BatteryListing } from "@/lib/db";
+
+const battery = (id: string) => ({ id, server_id: id, battery_product_id: "p", brand_id: "b", brand: "Varta", size_id: "s", size_code: "NS60", terminal: "LEFT",
+  battery_type: "MF", voltage: 12, capacity_ah: 45, cca: 330, warranty_months: 12, status: "APPROVED", review_status: "OK", hidden: 0, hidden_reason: null,
+  rejected_reason: null, price_ghs: 900, photos: "[]", in_stock: 1, price_advice: null, updated_at: "x" }) as BatteryListing;
+
+describe("productSections with batteries", () => {
+  it("puts Batteries after Oils & fluids", () => {
+    const s = productSections([], [], [], [fluid("f1")], [battery("b1"), battery("b2")]);
+    expect(s.map((x) => [x.key, x.count])).toEqual([["Oils & fluids", 1], ["Batteries", 2]]);
+    expect(s[1].data[0][0]).toMatchObject({ kind: "battery", id: "b:b1" });
+  });
+});

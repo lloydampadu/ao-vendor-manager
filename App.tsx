@@ -36,11 +36,11 @@ export default function App(): React.JSX.Element {
   const pendingTarget = useRef<NotificationTarget | null>(null);
 
   const [fontsLoaded, fontError] = useFonts({
-    light: require("./assets/fonts/light.otf"),
-    regular: require("./assets/fonts/regular.otf"),
-    medium: require("./assets/fonts/medium.otf"),
-    bold: require("./assets/fonts/bold.otf"),
-    xtrabold: require("./assets/fonts/xtrabold.otf"),
+    light: require("./assets/fonts/light.ttf"),
+    regular: require("./assets/fonts/regular.ttf"),
+    medium: require("./assets/fonts/medium.ttf"),
+    bold: require("./assets/fonts/bold.ttf"),
+    xtrabold: require("./assets/fonts/xtrabold.ttf"),
   });
 
   useEffect(() => {

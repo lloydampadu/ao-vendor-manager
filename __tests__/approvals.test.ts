@@ -144,3 +144,25 @@ describe("Oils & fluids approval", () => {
     expect(needsBrandsStep([OILS_FLUIDS, "Fender"])).toBe(true);
   });
 });
+
+import { canListBatteries } from "@/lib/approvals";
+
+describe("Batteries approval", () => {
+  it("Batteries, or the catalog part Battery, lets a vendor list batteries", () => {
+    expect(canListBatteries(["Batteries"])).toBe(true);
+    expect(canListBatteries(["battery"])).toBe(true);
+    expect(canListBatteries(["Battery Cable"])).toBe(false);
+  });
+  it("adds a Batteries tile and asks for no brands from a battery-only vendor", () => {
+    expect(approvedKinds(["Batteries"]).map((k) => `${k.label}:${k.form}`)).toEqual(["Batteries:battery"]);
+    expect(needsBrandsStep(["Batteries"])).toBe(false);
+    expect(requestableSections([], []).map((s) => s.title)).toContain("Batteries");
+    expect(groupOf("Batteries")).toBe("Batteries");
+  });
+});
+
+describe("requestableSections batteries", () => {
+  it("does not offer Batteries to a vendor already approved via the Battery part", () => {
+    expect(requestableSections(["Battery"], []).map((s) => s.title)).not.toContain("Batteries");
+  });
+});
