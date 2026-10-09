@@ -1,4 +1,4 @@
-// GENERATED from AbosseyOkai packages/parts/src/index.ts (sha256 8131d3f206b8). Do not edit.
+// GENERATED from AbosseyOkai packages/parts/src/index.ts (sha256 6e24df54bf72). Do not edit.
 // Regenerate: node packages/parts/scripts/export-for-vendor-app.mjs <path-to-ao-vendor-manager>
 
 // Matching typed part names against the catalog.
@@ -182,6 +182,8 @@ export function bestMatch(query: string, candidates: string[]): PartSuggestion |
 // One search for customers, vendors, the control room and routing. It returns parts,
 // never a rewrite of what was typed.
 
+/** The longest part description, shared by the API (validation, AI draft) and the control room editor. */
+export const PART_DESCRIPTION_MAX = 400;
 export const PART_SIDES = ["NONE", "LEFT_RIGHT"] as const;
 export const PART_POSITIONS = ["NONE", "FRONT_REAR"] as const;
 export const DEPENDS_ON = ["ENGINE", "GEARBOX", "DRIVE", "BODY", "FUEL", "MARKET_SPEC"] as const;
