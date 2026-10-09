@@ -4,14 +4,14 @@
 // checks the same rules; checking here gives the vendor the message before anything is queued.
 import type { ApiBatteryCatalog } from "./api";
 import type { BatteryListing } from "./db";
+import { ALREADY_LISTED_MESSAGE, NOT_LISTED, sameName } from "./listing-pick";
 
 export type BatteryPick = {
   brandId: string | null; brandName: string; sizeId: string; terminal: "" | "LEFT" | "RIGHT";
   type: string; voltage: number; capacityAh: string; cca: string; warranty: string; genuine: boolean;
 };
 
-export const NOT_LISTED = "Not in the list";
-export const ALREADY_LISTED_MESSAGE = "You already list this. Edit your existing listing.";
+export { ALREADY_LISTED_MESSAGE, NOT_LISTED };
 
 export const emptyBatteryPick = (): BatteryPick =>
   ({ brandId: null, brandName: "", sizeId: "", terminal: "", type: "", voltage: 12, capacityAh: "", cca: "", warranty: "", genuine: false });
@@ -31,12 +31,10 @@ export const pickSize = (p: BatteryPick, sizeId: string): BatteryPick => clearFi
 /** A new side clears the figures, which belong to one battery. */
 export const pickTerminal = (p: BatteryPick, terminal: BatteryPick["terminal"]): BatteryPick => clearFigures({ ...p, terminal });
 
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
 /** A brand typed under "Not in the list" that is in the list is that brand: no label figures are asked for. */
 export function resolveTypedBrand(c: ApiBatteryCatalog, p: BatteryPick): BatteryPick {
   if (p.brandId || !p.brandName.trim()) return p;
-  const brand = c.brands.find((b) => same(b.name, p.brandName));
+  const brand = c.brands.find((b) => sameName(b.name, p.brandName));
   return brand ? { ...p, brandId: brand.id, brandName: "" } : p;
 }
 
@@ -98,7 +96,7 @@ export function findExistingBattery(rows: readonly BatteryListing[], p: BatteryP
   return rows.find((r) =>
     r.status !== "REJECTED" && r.size_id === p.sizeId && r.terminal === p.terminal
     // A typed brand matches by name: once synced, the row carries the new brand's id.
-    && (p.brandId ? r.brand_id === p.brandId : same(r.brand, p.brandName)),
+    && (p.brandId ? r.brand_id === p.brandId : sameName(r.brand, p.brandName)),
   ) ?? null;
 }
 

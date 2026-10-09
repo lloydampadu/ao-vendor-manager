@@ -76,7 +76,17 @@ describe("changing a pick clears what depended on it", () => {
   it("a new side clears the figures so none of another battery's are kept", () => {
     expect(pickTerminal(full(), "RIGHT")).toMatchObject({ sizeId: "s60", terminal: "RIGHT", type: "", capacityAh: "", cca: "" });
   });
-  it("the already-listed message is the shared wording", () => {
+  it("takes its picker wording and name matching from the module the fluid form uses", () => {
+    jest.isolateModules(() => {
+      jest.doMock("@/lib/listing-pick", () => ({ NOT_LISTED: "probe: not listed", ALREADY_LISTED_MESSAGE: "probe: already listed", sameName: () => true }));
+      const battery = require("@/lib/battery-form");
+      const fluid = require("@/lib/fluid-form");
+      expect([battery.ALREADY_LISTED_MESSAGE, fluid.ALREADY_LISTED_MESSAGE]).toEqual(["probe: already listed", "probe: already listed"]);
+      expect([battery.NOT_LISTED, fluid.NOT_LISTED]).toEqual(["probe: not listed", "probe: not listed"]);
+      expect(battery.brandOptions({ ...catalog, brands: [] })).toEqual(["probe: not listed"]);
+      // Name matching too: with the probe every typed brand matches the first catalog brand.
+      expect(battery.resolveTypedBrand(catalog, { ...emptyBatteryPick(), brandName: "anything" }).brandId).toBe(catalog.brands[0].id);
+    });
     expect(ALREADY_LISTED_MESSAGE).toBe("You already list this. Edit your existing listing.");
   });
 });
