@@ -1,9 +1,11 @@
 import {
   deleteListing,
   enqueueListingOp,
+  upsertBatteryListing,
   upsertFluidListing,
   upsertLightListing,
   upsertTyreListing,
+  type BatteryListing,
   type FluidListing,
   type LightListing,
   type ListingKind,
@@ -107,4 +109,41 @@ export async function discardRejectedFluid(id: string): Promise<void> {
 export async function removeListing(kind: ListingKind, id: string, serverId: string | null): Promise<void> {
   await deleteListing(kind, id);
   await queue(kind, "delete", id, { server_id: serverId });
+}
+
+export function batteryPayload(l: BatteryListing): Record<string, unknown> {
+  return {
+    server_id: l.server_id ?? null,
+    ...(l.brand_id ? { brandId: l.brand_id } : { brandName: l.brand }),
+    sizeId: l.size_id, terminal: l.terminal, voltage: l.voltage, capacityAh: l.capacity_ah, cca: l.cca, type: l.battery_type,
+    priceGhs: l.price_ghs, photos: parseJson<string[]>(l.photos, []), inStock: l.in_stock === 1, warrantyMonths: l.warranty_months,
+    // The form refuses to save without the tick (genuine only). An update never sends it.
+    genuine: true,
+  };
+}
+
+/** An update only ever changes price, photos, stock and warranty: the product is fixed once listed. */
+export function batteryUpdatePayload(l: BatteryListing): Record<string, unknown> {
+  return { server_id: l.server_id ?? null, priceGhs: l.price_ghs, photos: parseJson<string[]>(l.photos, []), inStock: l.in_stock === 1, warrantyMonths: l.warranty_months };
+}
+
+/** A REJECTED row was refused for good: it can only be deleted (discardRejectedBattery), never saved or edited. */
+export async function saveBatteryListing(row: BatteryListing, isNew: boolean): Promise<void> {
+  if (row.status === "REJECTED") throw new Error("This listing was not saved. Delete it and add it again.");
+  await upsertBatteryListing(row);
+  await queue("battery", isNew ? "create" : "update", row.id, isNew ? batteryPayload(row) : batteryUpdatePayload(row));
+}
+
+/** The stock toggle sends ONLY inStock: the server refuses any other field once the approval is withdrawn. */
+export async function setBatteryStock(row: BatteryListing, inStock: boolean): Promise<BatteryListing> {
+  if (row.status === "REJECTED") throw new Error("This listing was not saved. Delete it and add it again.");
+  const next: BatteryListing = { ...row, in_stock: inStock ? 1 : 0, updated_at: new Date().toISOString() };
+  await upsertBatteryListing(next);
+  await queue("battery", "update", row.id, { server_id: row.server_id ?? null, inStock });
+  return next;
+}
+
+/** Deleting a REJECTED local row (the server never had it) only removes it here: no queued op, no server call. */
+export async function discardRejectedBattery(id: string): Promise<void> {
+  await deleteListing("battery", id);
 }
