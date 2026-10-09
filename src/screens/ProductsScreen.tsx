@@ -4,8 +4,10 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { errorMessage, productsApi, type ApiProduct } from "@/lib/api";
-import { cacheProducts, getCachedProducts, getFluidListings, getLightListings, getTyreListings, type FluidListing, type LightListing, type TyreListing } from "@/lib/db";
-import { discardRejectedFluid, removeListing, setFluidStock, saveLightListing, saveTyreListing } from "@/lib/listings";
+import { cacheProducts, getCachedProducts, getBatteryListings, getFluidListings, getLightListings, getTyreListings, type BatteryListing, type FluidListing, type LightListing, type TyreListing } from "@/lib/db";
+import { discardRejectedBattery, setBatteryStock, discardRejectedFluid, removeListing, setFluidStock, saveLightListing, saveTyreListing } from "@/lib/listings";
+import { batteryListingTitle } from "@/lib/battery-form";
+import { listingNote } from "@/lib/listing-note";
 import { fluidListingTitle, fluidNote } from "@/lib/fluid-catalog";
 import { parseJson } from "@/lib/assignment-status";
 import { productSections, type ProductItem } from "@/lib/products";
@@ -39,6 +41,8 @@ export default function ProductsScreen(): React.JSX.Element {
   const lamps = useSyncedQuery<LightListing[]>(loadLamps, []);
   const loadFluids = useCallback(() => getFluidListings(), []);
   const fluids = useSyncedQuery<FluidListing[]>(loadFluids, []);
+  const loadBatteries = useCallback(() => getBatteryListings(), []);
+  const batteries = useSyncedQuery<BatteryListing[]>(loadBatteries, []);
   const { refreshing: syncing, onRefresh: syncNow } = usePullToRefresh();
 
   const [parts, setParts] = useState<ApiProduct[]>([]);
@@ -71,7 +75,7 @@ export default function ProductsScreen(): React.JSX.Element {
     try { await Promise.all([loadParts(false), syncNow(), refreshProfile()]); } finally { setRefreshing(false); }
   }, [loadParts, syncNow, refreshProfile]);
 
-  const sections = useMemo(() => productSections(tyres.data, lamps.data, parts, fluids.data), [tyres.data, lamps.data, parts, fluids.data]);
+  const sections = useMemo(() => productSections(tyres.data, lamps.data, parts, fluids.data, batteries.data), [tyres.data, lamps.data, parts, fluids.data, batteries.data]);
 
   async function toggleStock(item: ProductItem): Promise<void> {
     if (item.kind === "tyre") {
@@ -88,6 +92,11 @@ export default function ProductsScreen(): React.JSX.Element {
       if (item.row.status === "REJECTED") return;
       const next = await setFluidStock(item.row, !item.row.in_stock);
       fluids.setData((prev) => prev.map((l) => (l.id === next.id ? next : l)));
+      void startSync();
+    } else if (item.kind === "battery") {
+      if (item.row.status === "REJECTED") return;
+      const next = await setBatteryStock(item.row, !item.row.in_stock);
+      batteries.setData((prev) => prev.map((l) => (l.id === next.id ? next : l)));
       void startSync();
     } else {
       const p = item.row;
@@ -120,6 +129,13 @@ export default function ProductsScreen(): React.JSX.Element {
       else await removeListing("fluid", item.row.id, item.row.server_id);
       await fluids.refresh();
       void startSync();
+    } else if (item.kind === "battery") {
+      batteries.setData((prev) => prev.filter((l) => l.id !== item.row.id));
+      // A refused row never reached the server: deleting it is local only.
+      if (item.row.status === "REJECTED") await discardRejectedBattery(item.row.id);
+      else await removeListing("battery", item.row.id, item.row.server_id);
+      await batteries.refresh();
+      void startSync();
     } else {
       try {
         await productsApi.delete(item.row.id);
@@ -141,10 +157,11 @@ export default function ProductsScreen(): React.JSX.Element {
     if (item.kind === "tyre") nav.navigate("AddEditTyreListing", { listing: item.row });
     else if (item.kind === "lamp") nav.navigate("AddEditLightListing", { listing: item.row });
     else if (item.kind === "fluid") nav.navigate("AddEditFluidListing", { listing: item.row });
+    else if (item.kind === "battery") nav.navigate("AddEditBatteryListing", { listing: item.row });
     else nav.navigate("AddEditPartListing", { category: item.row.category ?? "Other", product: item.row });
   }
 
-  if (tyres.loading || lamps.loading || fluids.loading || partsLoading) {
+  if (tyres.loading || lamps.loading || fluids.loading || batteries.loading || partsLoading) {
     return <View style={[gridStyles.container, { backgroundColor: C.offwhite }]}><ProductsSkeletonList /></View>;
   }
 
@@ -190,7 +207,7 @@ export default function ProductsScreen(): React.JSX.Element {
                       onPress={() => edit(item)}
                       onDelete={() => confirmDelete(item)}
                       onToggleStock={() => void toggleStock(item)}
-                      deleteOnly={item.kind === "fluid" && item.row.status === "REJECTED"}
+                      deleteOnly={(item.kind === "fluid" || item.kind === "battery") && item.row.status === "REJECTED"}
                     />
                   ) : null}
                 </View>
@@ -209,6 +226,7 @@ function titleOf(item: ProductItem): string {
   if (item.kind === "tyre") return `${item.row.brand} ${tyreSizeLabel(item.row)}`.trim();
   if (item.kind === "lamp") return `${item.row.light_type}${item.row.side !== "N/A" ? ` (${item.row.side})` : ""}`;
   if (item.kind === "fluid") return fluidListingTitle(item.row);
+  if (item.kind === "battery") return batteryListingTitle(item.row);
   return `"${item.row.name}"`;
 }
 
@@ -229,6 +247,12 @@ function cardOf(item: ProductItem) {
     return { title: `${l.brand} ${l.product}`, subtitle: [l.grade, l.size_label].filter(Boolean).join(" · "), priceGhs: l.price_ghs, condition: "NEW",
       photo: parseJson<string[]>(l.photos, [])[0], inStock: l.in_stock === 1, placeholderIcon: "water-outline" as const,
       note: fluidNote(l) ?? priceNote(parsePriceAdvice(l.price_advice)) };
+  }
+  if (item.kind === "battery") {
+    const l = item.row;
+    return { title: `${l.brand} ${l.size_code}`, subtitle: [l.terminal === "LEFT" ? "Positive left" : "Positive right", `${l.capacity_ah}Ah`, `${l.warranty_months} mo warranty`].join(" · "), priceGhs: l.price_ghs, condition: "NEW",
+      photo: parseJson<string[]>(l.photos, [])[0], inStock: l.in_stock === 1, placeholderIcon: "battery-charging-outline" as const,
+      note: listingNote(l) ?? priceNote(parsePriceAdvice(l.price_advice)) };
   }
   const p = item.row;
   return { title: p.name, titleSize: 12, priceGhs: p.priceGhs, condition: p.condition, photo: p.photos[0], inStock: p.inStock, placeholderIcon: "cube-outline" as const };
