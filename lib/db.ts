@@ -397,6 +397,11 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_battery_queue_synced ON battery_listing_queue(synced, created_at);
   CREATE INDEX IF NOT EXISTS idx_battery_listings_server ON battery_listings(server_id);
   `,
+  // v8 — the shared parts list and car list, cached with their ETag for offline search (plan 2b-1).
+  `
+  CREATE TABLE IF NOT EXISTS parts_catalog_cache (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL, etag TEXT, updated_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS car_list_cache (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL, etag TEXT, updated_at TEXT NOT NULL);
+  `,
 ];
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -449,6 +454,7 @@ export async function clearAllData(): Promise<void> {
       "orders", "stage_queue", "tyre_listings", "tyre_listing_queue", "light_listings", "light_listing_queue",
       "fluid_listings", "fluid_listing_queue", "fluid_catalog_cache",
       "battery_listings", "battery_listing_queue", "battery_catalog_cache",
+      "parts_catalog_cache", "car_list_cache",
     ]) {
       await db.runAsync(`DELETE FROM ${table}`);
     }
@@ -852,6 +858,20 @@ export async function getCachedBatteryCatalog(): Promise<ApiBatteryCatalog | nul
   const row = await db.getFirstAsync<{ json: string }>(`SELECT json FROM battery_catalog_cache WHERE id = 1`);
   if (!row) return null;
   try { return JSON.parse(row.json) as ApiBatteryCatalog; } catch { return null; }
+}
+
+export type CatalogCacheTable = "parts_catalog_cache" | "car_list_cache";
+
+export async function cacheCatalog(table: CatalogCacheTable, value: unknown, etag: string | null): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`INSERT OR REPLACE INTO ${table} (id, json, etag, updated_at) VALUES (1, ?, ?, ?)`, [JSON.stringify(value), etag, new Date().toISOString()]);
+}
+
+export async function getCachedCatalog<T>(table: CatalogCacheTable): Promise<{ value: T; etag: string | null } | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ json: string; etag: string | null }>(`SELECT json, etag FROM ${table} WHERE id = 1`);
+  if (!row) return null;
+  try { return { value: JSON.parse(row.json) as T, etag: row.etag }; } catch { return null; }
 }
 
 export async function getTyreListings(): Promise<TyreListing[]> {

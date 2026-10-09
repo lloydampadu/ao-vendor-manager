@@ -60,6 +60,7 @@ import {
   type TyreListing,
 } from "./db";
 import { createLogger } from "./logger";
+import { fetchCarList, fetchPartsCatalog, storeCarList, storePartsCatalog } from "./parts-list";
 import { mapAssignment, mapBattery, mapFluid, mapLight, mapOrder, mapTyre, mergeAssignment, type ApiAssignment, type ApiOrder } from "./mappers";
 import { uploadLocalPhotos } from "./upload";
 
@@ -480,7 +481,7 @@ export async function sync(): Promise<SyncResult> {
   await pushPendingBatteryListings().catch(note("pushBatteries"));
 
   // Network in parallel, database writes in sequence (single SQLite connection).
-  const [assignments, orders, tyres, lights, catalog, fluids, fluidCatalog, batteries, batteryCatalog] = await Promise.allSettled([
+  const [assignments, orders, tyres, lights, catalog, fluids, fluidCatalog, batteries, batteryCatalog, partsCatalog, carList] = await Promise.allSettled([
     fetchAssignments(),
     fetchOrders(),
     tyreListingsApi.getAll(),
@@ -490,6 +491,8 @@ export async function sync(): Promise<SyncResult> {
     fluidCatalogApi.get(),
     batteryListingsApi.getAll(),
     batteryCatalogApi.get(),
+    fetchPartsCatalog(),
+    fetchCarList(),
   ]);
 
   let assignmentsOk = true;
@@ -507,6 +510,8 @@ export async function sync(): Promise<SyncResult> {
   if (fluidCatalog.status === "fulfilled") await cacheFluidCatalog(fluidCatalog.value).catch(note("cacheFluidCatalog")); else note("fetchFluidCatalog")(fluidCatalog.reason);
   if (batteries.status === "fulfilled") await applyBatteryListings(batteries.value).catch(note("applyBatteries")); else note("fetchBatteries")(batteries.reason);
   if (batteryCatalog.status === "fulfilled") await cacheBatteryCatalog(batteryCatalog.value).catch(note("cacheBatteryCatalog")); else note("fetchBatteryCatalog")(batteryCatalog.reason);
+  if (partsCatalog.status === "fulfilled") await storePartsCatalog(partsCatalog.value).catch(note("cachePartsCatalog")); else note("fetchPartsCatalog")(partsCatalog.reason);
+  if (carList.status === "fulfilled") await storeCarList(carList.value).catch(note("cacheCarList")); else note("fetchCarList")(carList.reason);
 
   if (!assignmentsOk) return { ok: false, error: firstError };
   return { ok: true, error: firstError };

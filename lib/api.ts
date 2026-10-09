@@ -2,6 +2,7 @@ import Constants from "expo-constants";
 import { getToken, notifyUnauthorized } from "./auth";
 import { createLogger } from "./logger";
 import { ApiError, extractMessage } from "./api-error";
+import type { PartsCatalog } from "./parts-search.generated";
 
 export { ApiError, isApiError, errorMessage, failureAction } from "./api-error";
 
@@ -13,7 +14,7 @@ const TIMEOUT_MS = 15_000;
 /** Sent on every request so the admin control room can see which app build each vendor runs. */
 export const APP_VERSION: string = Constants.expoConfig?.version ?? "dev";
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function send(path: string, init: RequestInit = {}, accept304 = false): Promise<{ status: number; body: unknown; etag: string | null }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -48,17 +49,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       }
     }
 
-    if (!res.ok) {
+    if (!res.ok && !(accept304 && res.status === 304)) {
       if (res.status === 401 && token) {
         log.warn("401 with a stored token — signing out", undefined, { path });
         notifyUnauthorized();
       }
       throw new ApiError(extractMessage(body, res.status), res.status, body);
     }
-    return body as T;
+    return { status: res.status, body, etag: res.headers.get("ETag") };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return (await send(path, init)).body as T;
+}
+
+export type EtagResult<T> = { status: 200; body: T; etag: string | null } | { status: 304 };
+
+/** GET with If-None-Match: a 304 means the caller's cached copy is still current. */
+export async function getWithEtag<T>(path: string, etag: string | null): Promise<EtagResult<T>> {
+  const r = await send(path, etag ? { headers: { "If-None-Match": etag } } : {}, true);
+  return r.status === 304 ? { status: 304 } : { status: 200, body: r.body as T, etag: r.etag };
 }
 
 export const api = {
@@ -232,6 +245,29 @@ export const batteryListingsApi = {
 export const batteryCatalogApi = {
   get: () => api.get<ApiBatteryCatalog>("/batteries/catalog"),
 };
+
+/** GET /vehicles/catalog: the one car list (makes, models, generations), same shape LEGACY or LIVE. */
+export type ApiCarList = {
+  list: "LEGACY" | "LIVE";
+  version: string;
+  makes: {
+    name: string;
+    slug: string;
+    origin: string | null;
+    popularRank: number | null;
+    models: {
+      name: string;
+      aliases: string[];
+      popularRank: number | null;
+      yearFrom: number | null;
+      yearTo: number | null;
+      generations: { label: string; yearFrom: number; yearTo: number }[];
+    }[];
+  }[];
+};
+
+export const partsCatalogApi = { get: (etag: string | null) => getWithEtag<PartsCatalog>("/parts/catalog", etag) };
+export const carListApi = { get: (etag: string | null) => getWithEtag<ApiCarList>("/vehicles/catalog", etag) };
 
 export const tyreCatalogApi = {
   get: () => api.get<{ brands: ApiTyreCatalogBrand[] }>("/tyres/catalog"),
